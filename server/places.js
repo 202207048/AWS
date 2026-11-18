@@ -16,7 +16,9 @@ const stationByName = new Map(STATIONS.map((station) => [station.name, station])
 
 export function findStation(name) {
   if (typeof name !== 'string') return null
-  return stationByName.get(name.trim().replace(/역$/, '')) ?? null
+  const trimmed = name.trim()
+  // "서울역"은 역 이름 자체에 "역"이 들어 있으므로 원래 이름을 먼저 찾는다
+  return stationByName.get(trimmed) ?? stationByName.get(trimmed.replace(/역$/, '')) ?? null
 }
 
 export function distanceMeters(from, to) {

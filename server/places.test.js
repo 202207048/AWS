@@ -11,6 +11,7 @@ describe('findStation', () => {
   it('"역"이 붙어도 찾는다', () => {
     expect(findStation('사당역')?.name).toBe('사당')
     expect(findStation('없는역')).toBeNull()
+    expect(findStation('서울역')?.name).toBe('서울역')
   })
 })
 

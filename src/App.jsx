@@ -1,6 +1,8 @@
 import { useMemo, useRef, useState } from 'react'
 import { PURPOSES, STATIONS } from './stations.js'
-import { baselineStation, rankStations } from './mockCalc.js'
+import { rankStations } from './ranking.js'
+import { baselineStation } from './baseline.js'
+import MapView from './MapView.jsx'
 import { extractErrorMessage, requestExtract, requestVerdict } from './api.js'
 import { stationLabel } from './verdict.js'
 import { SAMPLE_CHAT } from './sampleChat.js'
@@ -592,7 +594,9 @@ function App() {
             )}
           </article>
 
-          {/* MAP_VIEW_SLOT: <MapView winner={winnerResult} baseline={baselineResult} origins={participantsWithStation} /> */}
+          {winnerResult && (
+            <MapView winner={winnerResult} baseline={baselineResult} origins={participantsWithStation} />
+          )}
         </section>
       )}
 
