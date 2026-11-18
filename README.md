@@ -74,6 +74,8 @@ API 서버 (Node.js)
 
 Node.js 22 이상이 필요합니다.
 
+Windows에서는 저장소 폴더의 `start.bat`을 더블클릭하면 패키지 설치, `.env` 생성, 실행, 브라우저 열기까지 한 번에 진행됩니다.
+
 ```bash
 npm install
 npm run dev
