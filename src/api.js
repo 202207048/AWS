@@ -39,8 +39,11 @@ function templateResponse(purpose, ranked) {
   }
 }
 
-export async function requestVerdict({ purpose, mode = 'fair', participants, ranked }) {
-  const response = await postJson('/api/verdict', { purpose, mode, participants, ranked })
+export async function requestVerdict({ purpose, purposes, purposeNote, mode = 'fair', participants, ranked }) {
+  const body = { purpose, mode, participants, ranked }
+  if (Array.isArray(purposes) && purposes.length > 0) body.purposes = purposes.slice(0, 3)
+  if (typeof purposeNote === 'string' && purposeNote.trim()) body.purposeNote = purposeNote.trim().slice(0, 80)
+  const response = await postJson('/api/verdict', body)
 
   if (response.ok === true && response.source === 'claude' && isVerdict(response.verdict)) {
     return response
@@ -51,6 +54,27 @@ export async function requestVerdict({ purpose, mode = 'fair', participants, ran
 
 export function requestExtract({ chat }) {
   return postJson('/api/extract', { chat })
+}
+
+// 주소·장소 검색 (GET /api/geocode). 검색 버튼/Enter로만 부른다(입력할 때마다 부르지 않음). 예외를 던지지 않는다.
+export async function requestGeocode(query) {
+  const q = String(query ?? '').trim()
+  if (!q) return { ok: false, reason: 'empty' }
+  try {
+    const response = await fetch(`/api/geocode?${new URLSearchParams({ q })}`)
+    const data = await response.json()
+    if (data?.ok === true && Array.isArray(data.results)) {
+      return {
+        ...data,
+        results: data.results
+          .filter((item) => item && typeof item.name === 'string' && Number.isFinite(item.lat) && Number.isFinite(item.lng))
+          .slice(0, 8),
+      }
+    }
+    return { ok: false, reason: typeof data?.reason === 'string' ? data.reason : 'error' }
+  } catch {
+    return { ok: false, reason: 'error' }
+  }
 }
 
 const EXTRACT_ERROR_MESSAGES = {

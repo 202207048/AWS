@@ -3,6 +3,12 @@ export function stationLabel(name) {
   return name.endsWith('역') ? name : `${name}역`
 }
 
+// 출발지 표시용: 역이면 "○○역", 주소·장소 검색으로 고른 곳(kind: 'place')이면 이름 그대로.
+export function originLabel(station) {
+  if (!station?.name) return ''
+  return station.kind === 'place' ? station.name : stationLabel(station.name)
+}
+
 export function createTemplateVerdict(result, purpose) {
   const station = stationLabel(result.station.name)
   const maxTime = Math.round(result.maxTime)
