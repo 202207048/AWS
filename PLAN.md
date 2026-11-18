@@ -2,31 +2,39 @@
 
 > 팀 공유용 작업 계획입니다. 세 명(개발1·개발2·개발3)이 각자 Kiro로 **동시에** 작업할 수 있도록, 담당 파일과 서로 주고받는 데이터 형식(약속)을 미리 정해 두었습니다.
 >
-> **진행 상황:** 1-0(의존성 버전 고정) 완료, `main`에 반영됨. 처음 보는 사람은 [OVERVIEW.md](OVERVIEW.md)로 전체 그림을 먼저 보세요.
+> **진행 상황:** 개발1 작업(1-0~1-5, 4-1, 4-2) 모두 완료·`main` 반영. 개발2 2-1 푸시됨(`dev2-calc`), 개발3 1차 작업 푸시됨(`dev3-ui`). 최신 지시는 `handoff/` 폴더 확인. 처음 보는 사람은 [OVERVIEW.md](OVERVIEW.md)로 전체 그림을 먼저 보세요.
 >
 > 10절의 항목은 **권고안을 기본값으로 진행**합니다. 바꾸고 싶으면 해당 작업을 시작하기 전에 팀이 합의하고 이 문서를 먼저 고칩니다.
 >
 > Kiro는 `.kiro/steering/team-rules.md`의 규칙을 매번 자동으로 읽습니다. 이 문서와 규칙이 다르면 이 문서를 따릅니다.
+>
+> **팀원별 전달 사항은 `handoff/` 폴더에 있습니다** (`handoff/TO_DEV1.md`, `TO_DEV2.md`, `TO_DEV3.md`). 작업을 시작할 때마다 `git fetch origin` 후 내 파일을 먼저 확인합니다.
+
+## 이번 변경 사항 (이미 작업 중인 사람)
+
+- 개발1: 다시 할 일 없음. `/api/verdict`는 `ranked` 안의 `weightedScore`와 요청의 `mode` 필드를 거부하지 않는다. 1-3에 샘플 단톡 fixture 추가.
+- 개발2: `rankStations`에 `{ mode = 'fair' } = {}` 추가, 모든 `StationResult`(baseline 포함)에 `weightedScore`, weighted 정렬 + 테스트. `roundedMinutes`, `straightLineDistance` export 유지.
+- 개발3: `mockCalc.js`에 `mode`와 `weightedScore` 추가, 판결 기준 토글, `src/sampleChat.js` + "예시 불러오기".
+- 예전 계획으로 만든 `.kiro/specs/**`가 있으면 지우거나 새로 만든다.
 
 ## 0. 시작 전 준비 (각자 한 번)
 
 1. **Node.js LTS 설치:** [nodejs.org](https://nodejs.org)에서 LTS 버전을 설치하고 Kiro를 **완전히 껐다 켭니다.** 터미널에서 `node -v`가 버전을 출력하면 성공.
 2. **Git 설치:** `git --version`이 안 되면 [git-scm.com](https://git-scm.com)에서 설치하고 Kiro를 재시작합니다.
-3. **최신 코드 받기 + 패키지 설치** (`AWS` 폴더에서):
+3. **브랜치가 아직 없으면** (`AWS` 폴더에서):
    ```bash
    git checkout main
    git pull origin main
+   git checkout -b dev2-calc   # 개발1 dev1-server, 개발3 dev3-ui
    npm install
    ```
-4. **내 브랜치 만들기** (이미 만들었다면 5번으로):
-   ```bash
-   git checkout -b dev2-calc   # 개발2. 개발3은 dev3-ui
-   ```
-5. **이미 브랜치에서 작업 중이었다면** `main`의 변경(lockfile, 규칙 파일)을 받아옵니다:
-   ```bash
-   git pull origin main
-   npm install
-   ```
+4. **이미 브랜치에서 작업 중이면** (`main`으로 가지 않는다):
+   - `git status`에 `package-lock.json`이 `??`로 보이면 먼저 지운다.
+   - 내 담당 파일을 커밋한다.
+   - `git pull --no-rebase origin main`
+   - `package.json` / `package-lock.json` 충돌 시: `git checkout origin/main -- package.json package-lock.json` 후 커밋.
+   - `npm install` 후 Kiro에서 새 채팅을 시작한다.
+5. Kiro 작업 폴더는 반드시 `AWS` 폴더 자체로 연다 (`.kiro/steering`이 읽히도록). PowerShell이 `npm`을 막으면 `npm.cmd`를 쓴다.
 6. `npm test`와 `npm run dev`가 동작하는지 확인하고 시작합니다.
 
 ## 1. 한 줄 요약
@@ -58,8 +66,8 @@
 | 담당 | 맡는 일 | 혼자 수정하는 파일 (다른 사람은 수정 금지) |
 |---|---|---|
 | **개발1 — 서버·Claude** | 버전 고정, API 서버, Claude 판결문·단톡 추출 | `server/**`, `vite.config.js`, `package.json`, `package-lock.json`, `.env.example`, `README.md` |
-| **개발2 — 계산·데이터** | 지하철 데이터, 그래프 계산, 순위, 기존 방식 계산, 데모 조합 찾기 | `src/ranking.js`, `src/graph.js`, `src/baseline.js`, `src/stations.js`, `src/data/**`, `src/*.test.js` 중 계산 관련, `scripts/**` |
-| **개발3 — 화면** | 단톡 입력 화면, 비교 화면, 판결문 표시, API 호출, 공유 메시지 | `src/App.jsx`, `src/styles.css`, `src/api.js`, `src/mockCalc.js`, `src/sampleChat.js`, `src/verdict.js`, `src/verdict.test.js` |
+| **개발2 — 계산·데이터·지도** | 지하철 데이터, 그래프 계산, 순위, 기존 방식 계산, 데모 조합 찾기, 지도 컴포넌트(17절) | `src/ranking.js`, `src/graph.js`, `src/baseline.js`, `src/stations.js`, `src/data/**`, `src/ranking.test.js`, `src/graph.test.js`, `src/baseline.test.js`, `src/data/*.test.js`, `scripts/**`, `src/MapView.jsx`, `src/MapView.css`, `src/places.js`, `src/places.test.js` |
+| **개발3 — 화면** | 단톡 입력 화면, 비교 화면, 판결문 표시, API 호출, 공유 메시지 | `src/App.jsx`, `src/styles.css`, `src/api.js`, `src/api.test.js`, `src/mockCalc.js`, `src/sampleChat.js`, `src/verdict.js`, `src/verdict.test.js` |
 
 - 패키지 추가가 필요하면 **개발1에게 요청**한다 (`package.json` 충돌 방지).
 - 남의 파일을 고쳐야 할 것 같으면 직접 고치지 말고 담당자에게 말한다.
@@ -74,12 +82,14 @@
 ```js
 // src/ranking.js
 travelTime(fromName, toName)        // → { minutes, transfers }  (같은 역이면 { minutes: 0, transfers: 0 })
-rankStations(participants, stations, { mode }) // → StationResult[]  (공평한 순서로 정렬)
+rankStations(participants, stations, { mode = 'fair' } = {}) // → StationResult[]  3번째 인자는 생략 가능
 // mode: 'fair'(기본값) = 최대 시간 → 편차 순서로 정렬
 //       'weighted'     = 기존 점수(최대×0.7 + 편차×0.3)가 낮은 순서로 정렬
+// 정렬 비교는 분 단위로 반올림한 값으로 한다 (화면 표시와 동일). 완전히 같으면 역 이름 가나다순.
+// 기존 export roundedMinutes, straightLineDistance는 유지. 기존 score 필드는 weightedScore로 대체.
 
 // src/baseline.js
-baselineStation(participants, stations) // → StationResult  (좌표 평균점에서 가장 가까운 역, 이동시간은 travelTime으로 계산)
+baselineStation(participants, stations) // → StationResult  (좌표 평균점에서 가장 가까운 역, 이동시간은 travelTime으로 계산, weightedScore 포함)
 
 // StationResult 형식
 {
@@ -92,6 +102,7 @@ baselineStation(participants, stations) // → StationResult  (좌표 평균점�
 
 // participants 형식 (기존과 동일)
 [{ id, station: { name, lat, lng } }]
+// 화면 state는 { id, name, station|null, hint }를 가질 수 있고, station이 null이 아닌 행만 rankStations에 넘긴다.
 ```
 
 - 지하철 그래프가 완성되기 전에는 `travelTime`이 기존 직선거리 공식을 쓰고 `transfers: 0`을 돌려준다. 그래서 개발3은 처음부터 이 형식으로 화면을 만들 수 있다.
@@ -103,6 +114,7 @@ baselineStation(participants, stations) // → StationResult  (좌표 평균점�
 ```json
 요청: {
   "purpose": "밥",
+  "mode": "fair",   // 선택
   "participants": [{ "id": 1, "stationName": "강남" }],
   "ranked": [StationResult, StationResult, StationResult]
 }
@@ -116,11 +128,18 @@ baselineStation(participants, stations) // → StationResult  (좌표 평균점�
 요청: { "chat": "단톡 대화 원문" }
 응답 성공: {
   "ok": true,
-  "participants": [{ "name": "민수", "station": "강남" }, { "name": "지영", "station": null, "hint": "일산" }],
-  "purpose": "밥"   // 대화에 없으면 null
+  "participants": [
+    { "name": "민수", "station": "잠실" },
+    { "name": "지영", "station": "강남" },
+    { "name": "현우", "station": "수원" },
+    { "name": "서연", "station": null, "hint": "일산" }
+  ],
+  "purpose": "밥"   // 밥/카페/술/공부 중 하나, 대화에 없으면 null
 }
 응답 실패: { "ok": false, "reason": "..." }
 ```
+
+- 참여자 순서는 대화에 처음 등장한 순서, 한 사람은 한 번만, 최대 6명.
 
 - `station`은 30개 역 이름 중 하나이거나 `null`이다. `null`이면 화면에서 사용자가 직접 고르기 전에는 계산하지 않는다.
 - 실패 응답이 오거나 서버가 꺼져 있으면, 개발3의 화면이 **브라우저 쪽 템플릿 판결문**(`src/verdict.js`의 `createTemplateVerdict`)과 수동 입력으로 계속 동작한다.
@@ -132,7 +151,7 @@ baselineStation(participants, stations) // → StationResult  (좌표 평균점�
 3. 각자 작업 단위가 끝날 때마다 커밋하고 자기 브랜치에 푸시한다.
 4. **중간 합치기 (시작 후 약 2시간):** **개발1 → 개발3 → 개발2** 순서로 `main`에 합친다. 담당 파일이 겹치지 않으므로 충돌은 거의 없어야 한다.
    - 이 순서인 이유: 개발2의 계산 결과 형식이 바뀌면 기존 화면(`App.jsx`의 점수 표시)이 깨진다. 화면(개발3)이 먼저 새 형식(`mockCalc.js`)으로 바뀐 뒤에 계산(개발2)을 합치면 `main`이 중간에 깨지지 않는다.
-5. 합친 뒤 개발3이 `App.jsx`의 import를 `mockCalc.js`에서 실제 모듈(`ranking.js`, `baseline.js`)로 바꾸고, 실제 API와 연결해 끝까지 동작하는지 확인한다.
+5. 합친 뒤 개발3이 `App.jsx`의 import를 `mockCalc.js`에서 실제 모듈(`ranking.js`, `baseline.js`)로 바꾸고, 실제 API와 연결해 끝까지 동작하는지 확인한다. 개발3은 `dev3-ui`에서 `main`을 받은 뒤 import를 바꾸고 다시 합친다.
 6. 남은 시간은 리허설과 버그 수정.
 
 ## 7. 담당별 작업
@@ -157,9 +176,9 @@ baselineStation(participants, stations) // → StationResult  (좌표 평균점�
 | 2-1 | 계산 모듈 형식 맞추기 | 5-1의 `travelTime` / `rankStations` / `StationResult` 형식으로 변경 (처음에는 직선거리 공식 그대로). 점수 방식은 `mode: 'fair'`(기본) / `'weighted'` 두 가지 모두 지원. 두 모드 각각 정렬 테스트. 기존 테스트(`ranking.test.js:8-10`, `:32`) 수정 | 필수 |
 | 2-2 | 기존 방식 계산 | `src/baseline.js` + 테스트. 좌표 평균점에서 가장 가까운 역을 실제로 계산 | 필수 |
 | 2-3 | 지하철 데이터 생성 후 **멈춤** | `src/data/subway.json`: 노드 = 30개 후보역 + 필요한 환승역. 간선 `{ from, to, line, stops, minutes, verified }`, `minutes = stops × 2`. 사람이 지도 앱으로 확인한 구간만 `verified: true` | 필수 |
-| 2-4 | 데이터 자동 점검 | 모든 역 연결됨, 간선 양방향, 좌표로 계산한 속도가 비정상 범위가 아님을 확인하는 테스트 | 필수 |
+| 2-4 | 데이터 자동 점검 | 모든 역 연결됨, 간선 양방향, 좌표 직선거리 기준 평균 속도가 10~120km/h 안에 있음을 확인하는 테스트 | 필수 |
 | 2-5 | 그래프 계산으로 교체 | 다익스트라 상태를 (역, 노선)으로 두어 환승 시 +5분. 같은 역 0분 / 환승 +5분 테스트 통과. `travelTime`만 바뀌고 형식은 그대로 | 필수 |
-| 2-6 | 데모 조합 찾기 | `scripts/`에 "기존 방식 결과 ≠ 우리 판결"인 출발지 조합을 찾는 스크립트. 결과 목록을 팀에 공유 | 필수 |
+| 2-6 | 데모 조합 찾기 | `scripts/`에 "fair 1위 ≠ 기존 방식", "fair 1위 ≠ weighted 1위"인 출발지 조합을 모두 찾는 스크립트. 결과를 `handoff/`의 팀원 파일로 공유 | 필수 |
 
 ### 개발3 — 화면
 
@@ -167,7 +186,7 @@ baselineStation(participants, stations) // → StationResult  (좌표 평균점�
 |---|---|---|---|
 | 3-1 | API 호출 모듈 | `src/api.js`에 `requestVerdict`, `requestExtract`. 실패·네트워크 오류 시 템플릿 판결문으로 대체. `verdict.js`는 템플릿 함수만 남기고 Gemini 코드 제거, `verdict.test.js` 갱신 | 필수 |
 | 3-2 | 단톡 붙여넣기 화면 | 입력칸 + 버튼 → 드롭다운 미리 채움. `station: null`인 행은 강조하고 사용자가 고르기 전에는 판결 버튼 비활성. "대화 내용은 저장하지 않습니다" 안내. 16절 샘플 단톡을 `src/sampleChat.js`에 넣고 "예시 불러오기" 버튼으로 채움 | 필수 |
-| 3-3 | 결과 표 갱신 | 참여자별 시간 + 환승 횟수. 점수 칸은 "최대 N분 · 편차 M분" (가중 모드에서는 점수도 함께). 결과 위에 "판결 기준" 토글(공평 우선 / 가중 점수, 기본은 공평 우선). 공식 문구(`App.jsx:207`)를 선택된 방식에 맞게 표시. "추정치" 표기 | 필수 |
+| 3-3 | 결과 표 갱신 | 참여자별 시간 + 환승 횟수. 점수 칸은 "최대 N분 · 편차 M분" (가중 모드에서는 점수도 함께). 결과 위에 "판결 기준" 토글(공평 우선 / 가중 점수, 기본은 공평 우선). 공식 문구(`App.jsx:207`)를 선택된 방식에 맞게 표시. "추정치" 표기. `mode`는 `App.jsx` state(기본 `'fair'`). 토글 시 결과를 지우지 않고 다시 계산하며, 1위 역이 바뀌면 판결문을 다시 요청한다(요청에 `mode` 포함) | 필수 |
 | 3-4 | 기존 방식 비교 카드 | `baselineStation` 결과와 1위를 나란히: 역 이름, 최대 시간, 편차 | 필수 |
 | 3-5 | 판결문 카드 | `order` / `reason` / `sentence`를 주문 / 판결 이유 / 선고로 표시. Gemini 안내 문구(`App.jsx:227`) 교체 | 필수 |
 | 3-6 | 공유 메시지 복사 | 계산된 숫자로만 만든 문구를 클립보드에 복사 | 시간 남으면 |
@@ -185,7 +204,7 @@ baselineStation(participants, stations) // → StationResult  (좌표 평균점�
   - `output_config.effort: "low"`, `max_tokens` 약 4000 (생각 단계도 이 한도를 쓰므로 작게 잡으면 잘림)
   - `client.messages.parse` + `zodOutputFormat`으로 정해진 필드의 JSON을 받는다
   - `stop_reason`이 `end_turn`이 아니거나 `parsed_output`이 null이면 실패
-  - SDK에 타임아웃(약 20초)과 재시도 횟수(0~1회)를 지정해 무대에서 오래 멈추지 않게 한다
+  - SDK에 `timeout: 20_000`(TS SDK는 밀리초), `maxRetries: 0`을 지정해 무대에서 오래 멈추지 않게 한다
 
 ## 9. 정직성 규칙
 
@@ -210,10 +229,11 @@ baselineStation(participants, stations) // → StationResult  (좌표 평균점�
 
 ## 11. 데모 시나리오
 
-1. 샘플 단톡 대화를 붙여넣는다 → 드롭다운이 채워진다.
+1. "예시 불러오기"로 샘플 단톡을 넣고 "출발역 채우기" → 드롭다운이 채워진다.
 2. 목록에 없는 출발지(예: 일산)는 비어 있고, 사용자가 직접 역을 고른다 → "최종 결정은 사람이 한다"를 보여 주는 장면.
 3. "기존 방식 vs 판결" 비교 → 판결문.
-4. 출발지 조합은 개발2의 스크립트(2-6)가 찾은 목록에서 고른다.
+4. "판결 기준" 토글로 가중 점수 방식과 결과 차이를 보여 준다.
+5. 출발지 조합은 개발2의 스크립트(2-6)가 찾은 목록에서 고른다.
 
 ## 12. Kiro 사용법
 
@@ -225,6 +245,8 @@ PLAN.md를 읽고 "개발N" 담당 작업만 해줘.
 - 5절의 공통 약속(함수 형식, API 형식)을 그대로 지켜.
 - 7절 내 표의 작업을 위에서부터 하나씩 하고, 작업 하나가 끝날 때마다 멈추고 검토를 기다려.
 - 패키지 추가가 필요하면 직접 설치하지 말고 알려줘.
+- 테스트는 14절, 화면은 15절, 샘플은 16절을 따르고 묻지 마.
+- 시작 전에 git fetch origin 후 handoff/TO_DEVN.md의 최신 지시를 먼저 확인해.
 ```
 
 ## 13. 최종 점검표 (합친 뒤)
@@ -238,11 +260,12 @@ PLAN.md를 읽고 "개발N" 담당 작업만 해줘.
 ## 14. 테스트 기준 (Kiro가 묻지 않고 따를 것)
 
 - 도구는 **vitest** (`npm test`). 새 테스트 도구를 추가하지 않는다.
-- 테스트 파일은 대상 파일 옆에 `*.test.js`로 둔다 (예: `src/graph.js` → `src/graph.test.js`, `server/claude.js` → `server/claude.test.js`).
+- 테스트 파일은 대상 파일 옆에 `*.test.js`로 둔다 (예: `src/graph.js` → `src/graph.test.js`, `server/service.js` → `server/service.test.js`).
 - 테스트할 범위는 **7절 내 작업의 "완료 기준"에 적힌 항목**이다. 그 이상은 만들지 않는다.
 - 외부 네트워크·API를 호출하지 않는다. Claude 호출은 SDK를 mock으로 대체한다.
 - 기존 테스트가 새 형식과 맞지 않으면 **내 담당 테스트만** 새 형식에 맞게 고친다.
 - 작업이 끝나면 `npm test` 결과를 보여 주고 멈춘다.
+- 화면(`App.jsx`)은 자동 테스트를 만들지 않는다. 3-2~3-6의 완료 기준은 `npm run build` 통과 + 사용자의 브라우저 확인이다.
 
 ## 15. 화면 배치 기준 (개발3)
 
@@ -272,3 +295,67 @@ PLAN.md를 읽고 "개발N" 담당 작업만 해줘.
 
 - 기대 결과: 민수=잠실, 지영=강남, 현우=수원, 서연=null(힌트 "일산"), 목적=밥
 - 데모용 최종 출발지 조합은 2-6 스크립트 결과를 보고 바꿀 수 있다 (바꾸면 두 파일 모두 수정).
+
+## 17. 추가 기능: 지도 + 주변 장소 (개발1·개발2)
+
+판결된 역을 **지도**로 보여 주고, 그 근처의 **카페 / 음식점 / 놀 곳**을 실제 데이터로 보여 준다.
+
+### 데이터 출처 (정직성 규칙 적용)
+
+- 지도 타일: OpenStreetMap (키 불필요). 지도 아래에 `© OpenStreetMap contributors` 표기 필수.
+- 주변 장소: **실제 데이터만** 쓴다. AI가 가게 이름을 만들지 않는다.
+  - `.env`에 `KAKAO_REST_API_KEY`가 있으면 카카오 로컬 API (국내 데이터가 가장 풍부)
+  - 없으면 OpenStreetMap 검색(Nominatim). 국내 가게가 일부 빠질 수 있으므로 화면에 "OpenStreetMap 기준, 일부 누락 가능" 표기
+- **데모 안정성:** 30개 역 × 3분류 결과를 미리 받아 `server/data/places-cache.json`에 저장해 두고, 서버는 캐시를 먼저 쓴다. 인터넷이 끊겨도 지도 아래 목록은 나온다 (지도 타일은 인터넷 필요).
+
+### API (개발1이 만들고, 개발2가 호출)
+
+```json
+GET /api/places?station=사당&category=cafe        // category: cafe | food | play
+응답 성공: {
+  "ok": true,
+  "source": "kakao | osm",
+  "station": { "name": "사당", "lat": 37.4765, "lng": 126.9816 },
+  "radius": 500,
+  "category": "cafe",
+  "places": [
+    { "name": "가게 이름", "lat": 37.47, "lng": 126.98, "distance": 120, "address": "주소 또는 null", "url": "상세 링크 또는 null" }
+  ]
+}
+응답 실패: { "ok": false, "reason": "unknown_station | bad_category | unavailable" }
+```
+
+- 분류: `cafe` = 카페, `food` = 음식점·패스트푸드, `play` = 영화관·노래방·공원 등 놀 곳.
+- `places`는 가까운 순, 최대 15개. `distance`는 역에서의 직선거리(m, 정수).
+- 이 API는 Claude 키가 없어도 동작한다.
+
+### 역할
+
+| # | 담당 | 작업 | 파일 | 완료 기준 |
+|---|---|---|---|---|
+| 4-1 | 개발1 | `/api/places` + 카카오/OSM 데이터 수집 + 캐시 | `server/places.js`, `server/places.test.js`, `server/index.js`, `server/scripts/prefetch-places.js`, `server/data/places-cache.json` | 30개 역 캐시 생성, 캐시 우선 응답, 외부 호출 mock 테스트 통과 |
+| 4-2 | 개발1 | 지도 패키지 추가 | `package.json`, `package-lock.json` | `leaflet`, `react-leaflet` 정확한 버전 고정 |
+| 4-3 | 개발2 | 지도 컴포넌트 | `src/MapView.jsx`, `src/MapView.css` | 아래 props로 지도 표시. `npm run build` 통과 + 브라우저 확인 |
+| 4-4 | 개발2 | 주변 장소 호출 모듈 | `src/places.js`, `src/places.test.js` | `fetchPlaces(station, category)`가 `/api/places`를 부르고, 실패 시 `{ ok: false }`를 돌려주며 예외를 던지지 않음 |
+| 4-5 | 개발3 | 화면에 붙이기 (합칠 때) | `src/App.jsx` | 판결 카드 아래에 `<MapView ... />` 한 줄 추가 |
+
+### MapView props (개발2가 만들고, 개발3이 사용)
+
+```jsx
+<MapView
+  winner={StationResult}          // 판결된 역 (빨간 마커, 지도 중심)
+  baseline={StationResult | null} // 기존 방식 역 (회색 마커, 판결과 같으면 생략)
+  origins={[{ id, station: { name, lat, lng } }]} // 출발역 (번호 마커)
+/>
+```
+
+- 지도 높이 280px, 모바일 폭에 맞춤. 판결 역 중심, 출발역이 모두 보이도록 범위 자동 조정.
+- 지도 위에 "카페 / 음식점 / 놀 곳" 탭. 탭을 누르면 `fetchPlaces(winner.station.name, category)` 결과를 지도 마커 + 아래 목록(이름, 거리 m)으로 표시.
+- 실패하거나 결과가 0개면 "주변 장소 정보를 불러오지 못했어요" 한 줄만 표시 (지도는 그대로).
+- 목록 아래 출처 표기: `source`가 `osm`이면 "OpenStreetMap 기준, 일부 누락 가능", `kakao`면 "카카오맵 기준".
+- Leaflet 기본 마커 이미지 경로 문제를 피하려고 `L.divIcon`(CSS 원형 마커)을 쓴다.
+
+### 주의
+
+- 4-3·4-4는 개발1의 `/api/places`가 합쳐지기 전에도 만들 수 있다. 서버가 없으면 `fetchPlaces`가 `{ ok: false }`를 돌려주고 화면은 안내 문구만 표시한다.
+- 지도 패키지(4-2)는 개발1이 `main`에 먼저 올린다. 개발2는 그다음 `main`을 받아 `npm install` 후 시작한다.

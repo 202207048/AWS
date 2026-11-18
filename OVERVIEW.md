@@ -64,13 +64,13 @@ flowchart TB
 |---|---|---|---|
 | 브랜치 | `dev1-server` | `dev2-calc` | `dev3-ui` |
 | 핵심 작업 | API 서버, Claude 판결문, 단톡 추출 | 지하철 그래프, 순위, 기존 방식 계산 | 단톡 입력, 결과 표, 비교 카드, 판결문 카드 |
-| 담당 파일 | `server/`, `vite.config.js`, `package.json` | `src/ranking.js`, `src/graph.js`, `src/baseline.js`, `src/data/` | `src/App.jsx`, `src/styles.css`, `src/api.js` |
+| 주요 파일 (전체는 PLAN 4절) | `server/`, `vite.config.js`, `package.json` | `src/ranking.js`, `src/graph.js`, `src/baseline.js`, `src/data/` | `src/App.jsx`, `src/styles.css`, `src/api.js` |
 
 ## 진행 순서
 
 ```mermaid
 flowchart LR
-    S[0. 준비<br/>Node 설치 · npm install] --> P[각자 브랜치에서<br/>병렬 작업]
+    S["준비 (PLAN 0절)<br/>Node 설치 · npm install"] --> P[각자 브랜치에서<br/>병렬 작업]
     P --> M1[개발1 합치기]
     M1 --> M3[개발3 합치기]
     M3 --> M2[개발2 합치기]
@@ -84,6 +84,10 @@ flowchart LR
 
 - [x] 계획 확정 (PLAN.md)
 - [x] 1-0 의존성 버전 고정
+- [x] 개발1 필수 작업 전부 (API 서버, Claude 판결문·단톡 추출, 키 유출 점검) — `main`
+- [x] 지도용 주변 장소 API + 30개 역 실데이터 캐시 — `main`
+- [ ] 개발2: 지도 컴포넌트 (`PLAN.md` 17절)
+- 팀원별 전달 사항: [`handoff/`](handoff/) 폴더
 - [ ] 개발1: API 서버 · Claude 판결문 · 단톡 추출
 - [ ] 개발2: 계산 형식 · 기존 방식 · 지하철 데이터(사람 검증) · 그래프
 - [ ] 개발3: API 호출 · 단톡 화면 · 결과 표 · 비교 카드 · 판결문 카드
