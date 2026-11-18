@@ -115,6 +115,35 @@
   line-height: 1;
 }
 
+/* 참가자별 고정 색 (MapView.jsx의 PERSON_COLORS와 같은 순서) */
+.map-view .map-view-c0 { --map-view-person: #2563eb; }
+.map-view .map-view-c1 { --map-view-person: #059669; }
+.map-view .map-view-c2 { --map-view-person: #d97706; }
+.map-view .map-view-c3 { --map-view-person: #7c3aed; }
+.map-view .map-view-c4 { --map-view-person: #db2777; }
+.map-view .map-view-c5 { --map-view-person: #0891b2; }
+
+.map-view .map-view-pin--origin.map-view-c0 span,
+.map-view .map-view-pin--origin.map-view-c1 span,
+.map-view .map-view-pin--origin.map-view-c2 span,
+.map-view .map-view-pin--origin.map-view-c3 span,
+.map-view .map-view-pin--origin.map-view-c4 span,
+.map-view .map-view-pin--origin.map-view-c5 span {
+  background: var(--map-view-person);
+}
+
+.map-view .map-view-label--origin {
+  padding: 2px 6px;
+  border-color: var(--map-view-person, #2f2a25);
+  color: var(--map-view-person, #2f2a25);
+  background: rgba(255, 255, 255, 0.94);
+  font-size: 10px;
+}
+
+.map-view .map-view-label--origin::before {
+  border-right-color: var(--map-view-person, #2f2a25);
+}
+
 .map-view .map-view-pin--place span {
   border: 2px solid #fff;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
@@ -183,6 +212,72 @@
 .map-view__dot--food { background: var(--map-view-food); }
 .map-view__swatch--play,
 .map-view__dot--play { background: var(--map-view-play); }
+
+/* 사람별 판결 역까지 시간 (가장 오래 걸리는 사람은 굵게) */
+.map-view__people {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.map-view__person {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  padding: 4px 9px 4px 4px;
+  border: 1px solid var(--map-view-line);
+  border-radius: 99px;
+  background: #fff;
+  color: #5f584f;
+  font-size: 12px;
+}
+
+.map-view__person.is-max {
+  border-color: #cfc6ba;
+  color: var(--map-view-ink);
+  background: #f5f1ea;
+  font-weight: 800;
+}
+
+.map-view__person-dot {
+  display: inline-grid;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  background: var(--map-view-person, #2f2a25);
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.map-view__person-name {
+  font-weight: 700;
+  color: var(--map-view-ink);
+}
+
+.map-view__person-station {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--map-view-muted);
+}
+
+.map-view__person-time {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.map-view__person-max {
+  color: var(--map-view-accent);
+}
 
 .map-view__places {
   margin-top: 12px;

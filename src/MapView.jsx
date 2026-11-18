@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import L from 'leaflet'
-import { MapContainer, Marker, TileLayer, Tooltip, useMap } from 'react-leaflet'
+import { MapContainer, Marker, Polyline, TileLayer, Tooltip, useMap } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import './MapView.css'
 import { PLACE_CATEGORIES, fetchPlaces } from './places.js'
@@ -49,10 +49,16 @@ const baselineIcon = () =>
     }),
   )
 
-const originIcon = (label) =>
-  cachedIcon(`origin:${label}`, () =>
+// 참가자별 고정 색 6가지 (판결 역 색 #8e2026과 겹치지 않게). 실제 색 값은 CSS의 .map-view-c0~c5에 있다.
+const PERSON_COLOR_COUNT = 6
+const colorClass = (index) => `map-view-c${((index % PERSON_COLOR_COUNT) + PERSON_COLOR_COUNT) % PERSON_COLOR_COUNT}`
+const PERSON_COLORS = ['#2563eb', '#059669', '#d97706', '#7c3aed', '#db2777', '#0891b2']
+const personColor = (index) => PERSON_COLORS[index % PERSON_COLORS.length]
+
+const originIcon = (label, colorIndex) =>
+  cachedIcon(`origin:${label}:${colorIndex}`, () =>
     L.divIcon({
-      className: 'map-view-pin map-view-pin--origin',
+      className: `map-view-pin map-view-pin--origin ${colorClass(colorIndex)}`,
       html: `<span>${label}</span>`,
       iconSize: [label.length > 2 ? 34 : 22, 22],
       iconAnchor: [label.length > 2 ? 17 : 11, 11],
@@ -99,11 +105,21 @@ function groupOrigins(origins) {
   ;(origins ?? []).forEach((origin, index) => {
     if (!hasCoordinates(origin?.station)) return
     const key = origin.station.name
-    if (!groups.has(key)) groups.set(key, { station: origin.station, numbers: [] })
+    if (!groups.has(key)) groups.set(key, { station: origin.station, numbers: [], indexes: [] })
     groups.get(key).numbers.push(index + 1)
+    groups.get(key).indexes.push(index)
   })
   return [...groups.values()].map((group) => ({ ...group, label: group.numbers.join('·') }))
 }
+
+/** 판결 역까지 걸리는 시간(분). winner.times에 없으면 null. */
+function minutesTo(result, participantId) {
+  const times = Array.isArray(result?.times) ? result.times : []
+  const entry = times.find((item) => item?.participantId === participantId)
+  return Number.isFinite(entry?.minutes) ? Math.round(entry.minutes) : null
+}
+
+const minutesText = (minutes) => (minutes === null ? '시간 정보 없음' : `약 ${minutes}분`)
 
 /** 지도 범위 조정. 좌표 문자열이 바뀔 때만 다시 맞춰서, 부모가 다시 그려져도 사용자가 옮긴 화면을 되돌리지 않는다. */
 function FitView({ pointsKey, view, center }) {
@@ -129,6 +145,23 @@ function MapViewContent({ winner, baseline, origins, categories, initialCategory
   const winnerName = winnerStation.name
   const showBaseline = hasCoordinates(baseline?.station) && baseline.station.name !== winnerName
   const originGroups = useMemo(() => groupOrigins(origins), [origins])
+
+  // 참가자별 색·판결 역까지 시간. 가장 오래 걸리는 사람을 범례에서 굵게 보여 준다.
+  const people = (origins ?? []).map((origin, index) => ({
+    index,
+    number: index + 1,
+    name: typeof origin?.name === 'string' && origin.name.trim() ? origin.name.trim() : `${index + 1}번`,
+    stationName: origin?.station?.name ?? '',
+    minutes: minutesTo(winner, origin?.id),
+  }))
+  const knownMinutes = people.map(({ minutes }) => minutes).filter((value) => value !== null)
+  const maxMinutes = knownMinutes.length > 0 ? Math.max(...knownMinutes) : null
+  const routeLabel = (indexes) => {
+    const parts = indexes.map((i) => people[i]).filter(Boolean)
+    const same = parts.every(({ minutes }) => minutes === parts[0]?.minutes)
+    if (same && parts.length > 0) return `${parts.map(({ number }) => number).join('·')} · ${minutesText(parts[0].minutes)}`
+    return parts.map(({ number, minutes }) => `${number} · ${minutesText(minutes)}`).join(' / ')
+  }
 
   const pointsKey = JSON.stringify([
     [winnerStation.lat, winnerStation.lng],
@@ -210,15 +243,47 @@ function MapViewContent({ winner, baseline, origins, categories, initialCategory
           <TileLayer url={TILE_URL} attribution={TILE_ATTRIBUTION} />
           <FitView pointsKey={pointsKey} view={view} center={[winnerStation.lat, winnerStation.lng]} />
 
-          {originGroups.map(({ station, label, numbers }) => (
+          {/* 기존 방식 역까지는 옅은 회색 점선 (판결 역과 다를 때만) */}
+          {showBaseline &&
+            originGroups.map(({ station }) => (
+              <Polyline
+                key={`baseline-route-${station.name}`}
+                positions={[
+                  [station.lat, station.lng],
+                  [baseline.station.lat, baseline.station.lng],
+                ]}
+                pathOptions={{ color: '#8f8a84', weight: 1.5, opacity: 0.55, dashArray: '4 6', interactive: false }}
+              />
+            ))}
+
+          {/* 각자 출발역 → 판결 역 경로 (사람별 색) */}
+          {originGroups.map(({ station, indexes }) =>
+            station.name === winnerName ? null : (
+              <Polyline
+                key={`route-${station.name}`}
+                positions={[
+                  [station.lat, station.lng],
+                  [winnerStation.lat, winnerStation.lng],
+                ]}
+                pathOptions={{ color: personColor(indexes[0]), weight: 3, opacity: 0.8, interactive: false }}
+              />
+            ),
+          )}
+
+          {originGroups.map(({ station, label, indexes }) => (
             <Marker
               key={`origin-${station.name}`}
               position={[station.lat, station.lng]}
-              icon={originIcon(label)}
+              icon={originIcon(label, indexes[0])}
               zIndexOffset={2000}
             >
-              <Tooltip direction="top">
-                출발 {numbers.join(', ')}번 · {station.name}
+              <Tooltip
+                direction="right"
+                offset={[8, 0]}
+                permanent
+                className={`map-view-label map-view-label--origin ${colorClass(indexes[0])}`}
+              >
+                {routeLabel(indexes)}
               </Tooltip>
             </Marker>
           ))}
@@ -263,6 +328,25 @@ function MapViewContent({ winner, baseline, origins, categories, initialCategory
         {originGroups.length > 0 && <li><span className="map-view__swatch map-view__swatch--origin" />출발역(번호)</li>}
         <li><span className={`map-view__swatch map-view__swatch--${category}`} />{categoryLabel}</li>
       </ul>
+
+      {people.length > 0 && (
+        <ol className="map-view__people" aria-label={`${withStationSuffix(winnerName)}까지 각자 걸리는 시간`}>
+          {people.map(({ index, number, name, stationName, minutes }) => {
+            const isMax = maxMinutes !== null && minutes === maxMinutes && knownMinutes.length > 1
+            return (
+              <li key={`person-${index}`} className={`map-view__person${isMax ? ' is-max' : ''}`}>
+                <span className={`map-view__person-dot ${colorClass(index)}`} aria-hidden="true">{number}</span>
+                <span className="map-view__person-name">{name}</span>
+                {stationName && <span className="map-view__person-station">{stationName}</span>}
+                <span className="map-view__person-time">
+                  {minutesText(minutes)}
+                  {isMax && <span className="map-view__person-max"> · 최장</span>}
+                </span>
+              </li>
+            )
+          })}
+        </ol>
+      )}
 
       <div className="map-view__places" aria-live="polite">
         {loading && <p className="map-view__status">주변 {categoryLabel} 불러오는 중…</p>}
