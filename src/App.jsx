@@ -143,7 +143,7 @@ function App() {
   const participantsWithStation = useMemo(
     () => participants
       .filter((participant) => participant.station)
-      .map(({ id, station }) => ({ id, station })),
+      .map(({ id, name, station }) => ({ id, name, station })),
     [participants],
   )
   const modeCopy = MODE_COPY[mode]
@@ -296,8 +296,8 @@ function App() {
     const response = await requestExtract({ chat: trimmedChat })
     if (extractionVersion.current !== version) return
 
-    setIsExtracting(false)
     if (!response.ok || !Array.isArray(response.participants) || response.participants.length === 0) {
+      setIsExtracting(false)
       setExtractStatus({
         type: 'error',
         message: response.ok
@@ -330,7 +330,11 @@ function App() {
 
     // 목록에 없는 지명(예: 김포)은 바로 검색해 첫 결과를 출발지로 자동 선택한다. 사용자가 언제든 바꿀 수 있다.
     let autoCount = 0
-    for (const participant of extractedParticipants.filter((item) => !item.station && item.hint)) {
+    const hinted = extractedParticipants.filter((item) => !item.station && item.hint)
+    if (hinted.length > 0) {
+      setExtractStatus({ type: 'warning', message: `목록에 없는 지명 ${hinted.length}곳의 위치를 찾고 있어요…` })
+    }
+    for (const participant of hinted) {
       const geo = await requestGeocode(participant.hint)
       if (extractionVersion.current !== version) return
       const place = geo.ok ? geo.results?.[0] : null
@@ -349,11 +353,12 @@ function App() {
       )
     }
 
+    setIsExtracting(false)
     const unresolvedCount = extractedParticipants.filter((participant) => !participant.station).length - autoCount
     setExtractStatus({
       type: unresolvedCount > 0 || autoCount > 0 ? 'warning' : 'success',
       message: unresolvedCount > 0
-        ? `${extractedParticipants.length}명을 찾았습니다. 표시된 ${unresolvedCount}명의 출발지를 역 목록이나 주소 검색으로 골라 주세요.`
+        ? `${extractedParticipants.length}명을 찾았습니다. 표시된 ${unresolvedCount}명의 출발지를 역 목록이나 주소 검색으로 골라 주세요.${autoCount > 0 ? ` (${autoCount}곳은 자동 선택했어요)` : ''}`
         : autoCount > 0
           ? `${extractedParticipants.length}명의 출발지를 채웠습니다. 목록에 없던 ${autoCount}곳은 검색 결과로 자동 선택했으니 확인해 주세요.`
           : `${extractedParticipants.length}명의 출발역을 채웠습니다. 아래에서 결과를 확인해 주세요.`,
@@ -427,6 +432,11 @@ function App() {
             <span aria-hidden="true">📍</span> {participant.station.name}
           </span>
           {participant.station.address && <small>{participant.station.address}</small>}
+          {participant.autoFrom && (
+            <span className="station-auto">
+              “{participant.autoFrom}”을(를) 검색해 자동 선택했어요. 다르면 ×를 눌러 바꿔 주세요.
+            </span>
+          )}
           <button
             type="button"
             className="place-chip__clear"
