@@ -131,6 +131,7 @@ function App() {
   const nextId = useRef(3)
   const extractionVersion = useRef(0)
   const latestSearchQuery = useRef({})
+  const focusSearchId = useRef(null)
   const calculationVersion = useRef(0)
   const sampleDeck = useRef([])
   const lastSampleIndex = useRef(null)
@@ -207,6 +208,7 @@ function App() {
   }
 
   const openSearch = (id, query = '') => {
+    focusSearchId.current = id
     updateSearch(id, { open: true, query: searches[id]?.query || query, results: null, message: null, loading: false })
   }
 
@@ -450,6 +452,12 @@ function App() {
             <label className="sr-only" htmlFor={`search-${participant.id}`}>{label} 출발 주소·장소 검색</label>
             <input
               id={`search-${participant.id}`}
+              ref={(element) => {
+                if (element && focusSearchId.current === participant.id) {
+                  focusSearchId.current = null
+                  element.focus()
+                }
+              }}
               type="search"
               value={search.query ?? ''}
               onChange={(event) => updateSearch(participant.id, { query: event.target.value })}
