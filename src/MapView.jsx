@@ -87,10 +87,22 @@ const placeIcon = (category) =>
   )
 
 // 장소를 네이버지도·카카오맵에서 바로 열기 (출처 링크처럼 목록 오른쪽에 표시)
-export function naverMapUrl(place, stationName) {
-  const station = String(stationName ?? '').replace(/역$/, '')
-  const query = station ? `${place.name} ${station}역` : place.name
-  return `https://map.naver.com/p/search/${encodeURIComponent(query)}`
+// 위도·경도 → 웹 메르카토르(EPSG:3857) 좌표. 네이버 지도 URL의 c= 파라미터가 이 좌표계를 쓴다.
+function toWebMercator(lat, lng) {
+  const x = (lng * 20037508.34) / 180
+  const y = (Math.log(Math.tan(((90 + lat) * Math.PI) / 360)) / (Math.PI / 180)) * (20037508.34 / 180)
+  return { x: x.toFixed(2), y: y.toFixed(2) }
+}
+
+// 네이버 지도: 장소 이름으로 검색하되, 지도 중심을 그 장소 좌표에 맞춰 주변 결과가 먼저 나오게 한다.
+// (이름만 보내면 영문·다른 표기 가게는 엉뚱한 곳이 검색되므로 역 이름은 붙이지 않는다)
+export function naverMapUrl(place) {
+  const query = encodeURIComponent(String(place.name))
+  if (!Number.isFinite(place.lat) || !Number.isFinite(place.lng)) {
+    return `https://map.naver.com/p/search/${query}`
+  }
+  const { x, y } = toWebMercator(place.lat, place.lng)
+  return `https://map.naver.com/p/search/${query}?c=${x},${y},17,0,0,0,dh`
 }
 
 export function kakaoMapUrl(place) {
