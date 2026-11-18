@@ -1,23 +1,63 @@
-import { useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { PURPOSES, STATIONS } from './stations.js'
 import { baselineStation, rankStations } from './mockCalc.js'
-import { requestExtract, requestVerdict } from './api.js'
+import { extractErrorMessage, requestExtract, requestVerdict } from './api.js'
+import { stationLabel } from './verdict.js'
+import { SAMPLE_CHAT } from './sampleChat.js'
 
 const initialParticipants = [
   { id: 1, station: STATIONS[0] },
   { id: 2, station: STATIONS[1] },
 ]
 
+const MODES = [
+  { value: 'fair', label: '공평 우선' },
+  { value: 'weighted', label: '가중 점수' },
+]
+
+const MODE_COPY = {
+  fair: {
+    summary: '가장 오래 걸리는 사람의 시간을 먼저 줄이고, 같으면 참여자 간 편차가 작은 역을 골랐어요.',
+    sortRule: '최대 이동시간이 짧은 순, 같으면 편차가 작은 순, 그래도 같으면 역 이름 순으로 정렬합니다(분 단위 반올림 기준).',
+    ruling: '최대 이동시간을 줄이고 편차까지 비교한 역',
+  },
+  weighted: {
+    summary: '최대 이동시간과 편차를 섞은 가중 점수가 가장 낮은 역을 골랐어요.',
+    sortRule: '점수 = 최대 이동시간 × 0.7 + 편차 × 0.3. 점수가 낮은 순, 같으면 최대 이동시간이 짧은 순, 그래도 같으면 역 이름 순으로 정렬합니다.',
+    ruling: '가중 점수(최대 × 0.7 + 편차 × 0.3)가 가장 낮은 역',
+  },
+}
+
+function formatScore(score) {
+  return score.toFixed(1)
+}
+
+function toVerdictRanked(ranked) {
+  return ranked.map(({ station, times, maxTime, minTime, spread, totalTransfers = 0, weightedScore }) => ({
+    station,
+    times: times.map(({ participantId, minutes, transfers = 0 }) => ({
+      participantId,
+      minutes,
+      transfers,
+    })),
+    maxTime,
+    minTime,
+    spread,
+    totalTransfers,
+    weightedScore,
+  }))
+}
+
 function createShareMessage(result, participants, purpose) {
   const participantLines = participants.map((participant, index) => {
     const estimate = result.times.find(({ participantId }) => participantId === participant.id)
     const name = participant.name ?? `참여자 ${index + 1}`
-    return `${name} (${participant.station.name} 출발): 약 ${Math.round(estimate.minutes)}분 · 환승 ${estimate.transfers}회`
+    return `${name} (${stationLabel(participant.station.name)} 출발): 약 ${Math.round(estimate.minutes)}분 · 환승 ${estimate.transfers}회`
   })
 
   return [
     '[약속 장소 판사]',
-    `${purpose} 약속 장소: ${result.station.name}역`,
+    `${purpose} 약속 장소: ${stationLabel(result.station.name)}`,
     ...participantLines,
     `최대 ${Math.round(result.maxTime)}분 · 편차 ${Math.round(result.spread)}분`,
     '※ 이동시간과 환승 횟수는 추정치입니다.',
@@ -45,6 +85,7 @@ async function copyText(text) {
 function App() {
   const [participants, setParticipants] = useState(initialParticipants)
   const [purpose, setPurpose] = useState('밥')
+  const [mode, setMode] = useState('fair')
   const [chat, setChat] = useState('')
   const [extractStatus, setExtractStatus] = useState(null)
   const [isExtracting, setIsExtracting] = useState(false)
@@ -57,6 +98,16 @@ function App() {
   const extractionVersion = useRef(0)
   const calculationVersion = useRef(0)
   const hasUnresolvedStation = participants.some((participant) => !participant.station)
+
+  // 지도(MapView, PLAN 17절)에 넘길 데이터
+  const winnerResult = results[0] ?? null
+  const participantsWithStation = useMemo(
+    () => participants
+      .filter((participant) => participant.station)
+      .map(({ id, station }) => ({ id, station })),
+    [participants],
+  )
+  const modeCopy = MODE_COPY[mode]
 
   const invalidateResults = () => {
     calculationVersion.current += 1
@@ -100,6 +151,11 @@ function App() {
     invalidateResults()
   }
 
+  const loadSampleChat = () => {
+    setChat(SAMPLE_CHAT)
+    setExtractStatus(null)
+  }
+
   const extractChat = async () => {
     const trimmedChat = chat.trim()
     if (!trimmedChat || isExtracting) return
@@ -116,7 +172,9 @@ function App() {
     if (!response.ok || !Array.isArray(response.participants) || response.participants.length === 0) {
       setExtractStatus({
         type: 'error',
-        message: '대화를 분석하지 못했습니다. 아래에서 출발역을 직접 선택해 주세요.',
+        message: response.ok
+          ? '대화에서 참여자를 찾지 못했어요. 직접 선택해 주세요.'
+          : extractErrorMessage(response.reason),
       })
       return
     }
@@ -147,35 +205,19 @@ function App() {
     })
   }
 
-  const judgeMeetingPlace = async () => {
-    if (hasUnresolvedStation) return
-
+  // 판결문 요청. 더 새로운 계산이 시작되면(calculationVersion 증가) 늦게 온 응답은 버린다.
+  const fetchVerdict = async (ranked, verdictMode) => {
     const version = calculationVersion.current + 1
     calculationVersion.current = version
-    const ranked = rankStations(participants, STATIONS).slice(0, 3)
-    const baseline = baselineStation(participants, STATIONS)
-
-    setResults(ranked)
-    setBaselineResult(baseline)
     setVerdict(null)
     setCopyStatus(null)
     setIsJudging(true)
 
     const generated = await requestVerdict({
       purpose,
-      participants: participants.map(({ id, station }) => ({ id, stationName: station.name })),
-      ranked: ranked.map(({ station, times, maxTime, minTime, spread, totalTransfers = 0 }) => ({
-        station,
-        times: times.map(({ participantId, minutes, transfers = 0 }) => ({
-          participantId,
-          minutes,
-          transfers,
-        })),
-        maxTime,
-        minTime,
-        spread,
-        totalTransfers,
-      })),
+      mode: verdictMode,
+      participants: participantsWithStation.map(({ id, station }) => ({ id, stationName: station.name })),
+      ranked: toVerdictRanked(ranked),
     })
 
     if (calculationVersion.current === version) {
@@ -184,11 +226,32 @@ function App() {
     }
   }
 
+  const judgeMeetingPlace = () => {
+    if (hasUnresolvedStation) return
+
+    const ranked = rankStations(participantsWithStation, STATIONS, { mode }).slice(0, 3)
+    setResults(ranked)
+    setBaselineResult(baselineStation(participantsWithStation, STATIONS))
+    fetchVerdict(ranked, mode)
+  }
+
+  // 판결 기준 토글: 결과를 지우지 않고 다시 정렬하고, 1위 역이 바뀔 때만 판결문을 다시 요청한다.
+  const changeMode = (nextMode) => {
+    if (nextMode === mode) return
+    setMode(nextMode)
+    if (!winnerResult) return
+
+    const ranked = rankStations(participantsWithStation, STATIONS, { mode: nextMode }).slice(0, 3)
+    const winnerChanged = ranked[0]?.station.name !== winnerResult.station.name
+    setResults(ranked)
+    if (winnerChanged) fetchVerdict(ranked, nextMode)
+  }
+
   const copyShareMessage = async () => {
-    if (!results[0]) return
+    if (!winnerResult) return
 
     try {
-      await copyText(createShareMessage(results[0], participants, purpose))
+      await copyText(createShareMessage(winnerResult, participants, purpose))
       setCopyStatus('copied')
     } catch {
       setCopyStatus('error')
@@ -207,7 +270,6 @@ function App() {
       <section className="panel chat-panel" aria-labelledby="chat-title">
         <div className="section-heading">
           <div>
-            <span className="step">01</span>
             <h2 id="chat-title">단톡으로 한 번에 입력</h2>
           </div>
           <span className="ai-badge">AI 정리</span>
@@ -225,14 +287,24 @@ function App() {
           <span aria-hidden="true">🔒</span>
           대화 내용은 저장하지 않습니다.
         </div>
-        <button
-          className="extract-button"
-          type="button"
-          onClick={extractChat}
-          disabled={!chat.trim() || isExtracting}
-        >
-          {isExtracting ? '대화 정리 중…' : '참여자와 목적 찾아보기'}
-        </button>
+        <div className="chat-actions">
+          <button
+            className="sample-button"
+            type="button"
+            onClick={loadSampleChat}
+            disabled={isExtracting}
+          >
+            예시 불러오기
+          </button>
+          <button
+            className="extract-button"
+            type="button"
+            onClick={extractChat}
+            disabled={!chat.trim() || isExtracting}
+          >
+            {isExtracting ? '대화 정리 중…' : '출발역 채우기'}
+          </button>
+        </div>
         {extractStatus && (
           <p className={`extract-status ${extractStatus.type}`} role="status">
             {extractStatus.message}
@@ -243,8 +315,8 @@ function App() {
       <section className="panel input-panel" aria-labelledby="participants-title">
         <div className="section-heading">
           <div>
-            <span className="step">02</span>
-            <h2 id="participants-title">출발역 확인</h2>
+            <span className="step">01</span>
+            <h2 id="participants-title">누가 어디서 오나요?</h2>
           </div>
           <span className="count">{participants.length} / 6명</span>
         </div>
@@ -269,7 +341,7 @@ function App() {
                 >
                   <option value="" disabled>출발역을 선택하세요</option>
                   {STATIONS.map((station) => (
-                    <option key={station.name} value={station.name}>{station.name}역</option>
+                    <option key={station.name} value={station.name}>{stationLabel(station.name)}</option>
                   ))}
                 </select>
                 {!participant.station && (
@@ -308,7 +380,7 @@ function App() {
       <section className="panel" aria-labelledby="purpose-title">
         <div className="section-heading">
           <div>
-            <span className="step">03</span>
+            <span className="step">02</span>
             <h2 id="purpose-title">이번 약속의 목적은?</h2>
           </div>
         </div>
@@ -343,13 +415,30 @@ function App() {
             : '공평한 장소 판결하기'}
       </button>
 
-      {results.length > 0 && (
+      {winnerResult && (
         <section className="results" aria-live="polite">
           <div className="result-title">
-            <span className="step">04</span>
-            <h2>공평도 순위</h2>
+            <span className="step">03</span>
+            <h2>판결 결과</h2>
             <span className="estimate-badge">추정치</span>
-            <p>최대 이동시간을 먼저 줄이고, 같으면 참여자 간 편차가 작은 역을 골랐어요.</p>
+            <p>{modeCopy.summary}</p>
+          </div>
+
+          <div className="mode-toggle-row">
+            <span className="mode-toggle-label" id="mode-label">판결 기준</span>
+            <div className="mode-toggle" role="group" aria-labelledby="mode-label">
+              {MODES.map((item) => (
+                <button
+                  className={`mode-button ${mode === item.value ? 'selected' : ''}`}
+                  type="button"
+                  key={item.value}
+                  onClick={() => changeMode(item.value)}
+                  aria-pressed={mode === item.value}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className="table-wrap">
@@ -361,17 +450,17 @@ function App() {
                   {participants.map((participant, index) => (
                     <th key={participant.id}>
                       {participant.name ?? `참여자 ${index + 1}`}
-                      <small>{participant.station.name} 출발</small>
+                      <small>{stationLabel(participant.station.name)} 출발</small>
                     </th>
                   ))}
-                  <th>판결 기준</th>
+                  <th>{mode === 'weighted' ? '가중 점수' : '최대 · 편차'}</th>
                 </tr>
               </thead>
               <tbody>
                 {results.map((result, rank) => (
                   <tr className={rank === 0 ? 'winner-row' : ''} key={result.station.name}>
                     <td><span className={`rank rank-${rank + 1}`}>{rank + 1}</span></td>
-                    <td className="station-cell">{result.station.name}역</td>
+                    <td className="station-cell">{stationLabel(result.station.name)}</td>
                     {result.times.map(({ participantId, minutes, transfers }) => (
                       <td className="time-cell" key={participantId}>
                         약 {Math.round(minutes)}분
@@ -379,8 +468,10 @@ function App() {
                       </td>
                     ))}
                     <td className="criteria-cell">
-                      <strong>최대 {Math.round(result.maxTime)}분</strong>
-                      <small>편차 {Math.round(result.spread)}분</small>
+                      {mode === 'weighted' && (
+                        <strong className="score-value">점수 {formatScore(result.weightedScore)}</strong>
+                      )}
+                      <strong>최대 {Math.round(result.maxTime)}분 · 편차 {Math.round(result.spread)}분</strong>
                     </td>
                   </tr>
                 ))}
@@ -389,8 +480,8 @@ function App() {
           </div>
 
           <p className="formula-note">
-            현재는 같은 역 0분, 그 외 직선거리 × 2.5분 + 기본 10분으로 계산한 추정치입니다.
-            최대 이동시간이 짧은 순, 같으면 편차가 작은 순으로 정렬합니다.
+            이동시간은 같은 역 0분, 그 외 직선거리 × 2.5분 + 기본 10분으로 계산한 추정치입니다.
+            {' '}{modeCopy.sortRule}
           </p>
 
           {baselineResult && (
@@ -405,7 +496,7 @@ function App() {
               <div className="comparison-grid">
                 <article className="comparison-card baseline-card">
                   <span className="method-label">기존 방식</span>
-                  <h4>{baselineResult.station.name}역</h4>
+                  <h4>{stationLabel(baselineResult.station.name)}</h4>
                   <p>출발 좌표의 평균점에서 가장 가까운 역</p>
                   <dl>
                     <div>
@@ -416,22 +507,34 @@ function App() {
                       <dt>편차</dt>
                       <dd>{Math.round(baselineResult.spread)}분</dd>
                     </div>
+                    {mode === 'weighted' && (
+                      <div>
+                        <dt>점수</dt>
+                        <dd>{formatScore(baselineResult.weightedScore)}</dd>
+                      </div>
+                    )}
                   </dl>
                 </article>
                 <article className="comparison-card ruling-card">
                   <span className="method-label">우리 판결</span>
                   <span className="recommended-badge">추천</span>
-                  <h4>{results[0].station.name}역</h4>
-                  <p>최대 이동시간을 줄이고 편차까지 비교한 역</p>
+                  <h4>{stationLabel(winnerResult.station.name)}</h4>
+                  <p>{modeCopy.ruling}</p>
                   <dl>
                     <div>
                       <dt>최대</dt>
-                      <dd>{Math.round(results[0].maxTime)}분</dd>
+                      <dd>{Math.round(winnerResult.maxTime)}분</dd>
                     </div>
                     <div>
                       <dt>편차</dt>
-                      <dd>{Math.round(results[0].spread)}분</dd>
+                      <dd>{Math.round(winnerResult.spread)}분</dd>
                     </div>
+                    {mode === 'weighted' && (
+                      <div>
+                        <dt>점수</dt>
+                        <dd>{formatScore(winnerResult.weightedScore)}</dd>
+                      </div>
+                    )}
                   </dl>
                 </article>
               </div>
@@ -442,7 +545,7 @@ function App() {
             <div className="verdict-header">
               <div>
                 <span className="stamp">최종 판결</span>
-                <h2>{results[0].station.name}역</h2>
+                <h2>{stationLabel(winnerResult.station.name)}</h2>
               </div>
               <span className="gavel" aria-hidden="true">🔨</span>
             </div>
@@ -488,6 +591,8 @@ function App() {
               </>
             )}
           </article>
+
+          {/* MAP_VIEW_SLOT: <MapView winner={winnerResult} baseline={baselineResult} origins={participantsWithStation} /> */}
         </section>
       )}
 

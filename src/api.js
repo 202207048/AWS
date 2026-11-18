@@ -39,8 +39,8 @@ function templateResponse(purpose, ranked) {
   }
 }
 
-export async function requestVerdict({ purpose, participants, ranked }) {
-  const response = await postJson('/api/verdict', { purpose, participants, ranked })
+export async function requestVerdict({ purpose, mode = 'fair', participants, ranked }) {
+  const response = await postJson('/api/verdict', { purpose, mode, participants, ranked })
 
   if (response.ok === true && response.source === 'claude' && isVerdict(response.verdict)) {
     return response
@@ -51,4 +51,14 @@ export async function requestVerdict({ purpose, participants, ranked }) {
 
 export function requestExtract({ chat }) {
   return postJson('/api/extract', { chat })
+}
+
+const EXTRACT_ERROR_MESSAGES = {
+  too_long: '대화가 너무 길어요. 일부만 붙여넣어 주세요.',
+  no_key: 'AI 키가 없어 직접 선택해 주세요.',
+}
+
+// /api/extract 실패 이유를 화면에 보여 줄 짧은 안내로 바꾼다.
+export function extractErrorMessage(reason) {
+  return EXTRACT_ERROR_MESSAGES[reason] ?? '대화를 정리하지 못했어요. 직접 선택해 주세요.'
 }

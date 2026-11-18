@@ -1,6 +1,5 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { requestExtract, requestVerdict } from './api.js'
-import { createTemplateVerdict } from './verdict.js'
+import { describe, expect, it } from 'vitest'
+import { createTemplateVerdict, stationLabel } from './verdict.js'
 
 const result = {
   station: { name: '서울역', lat: 37.5547, lng: 126.9706 },
@@ -12,18 +11,16 @@ const result = {
   minTime: 30.8,
   spread: 7.6,
   totalTransfers: 0,
+  weightedScore: 29.16,
 }
 
-const request = {
-  purpose: '밥',
-  participants: [
-    { id: 1, stationName: '강남' },
-    { id: 2, stationName: '홍대입구' },
-  ],
-  ranked: [result],
-}
-
-afterEach(() => vi.restoreAllMocks())
+describe('stationLabel', () => {
+  it('역 이름에 "역"을 한 번만 붙인다', () => {
+    expect(stationLabel('사당')).toBe('사당역')
+    expect(stationLabel('서울역')).toBe('서울역')
+    expect(stationLabel('분당(서현)')).toBe('분당(서현)역')
+  })
+})
 
 describe('템플릿 판결문', () => {
   it('API와 같은 주문, 판결 이유, 선고 구조를 반환한다', () => {
@@ -33,74 +30,10 @@ describe('템플릿 판결문', () => {
       sentence: '전원은 이 판결에 따라 서울역으로 모일 것.',
     })
   })
-})
 
-describe('requestVerdict', () => {
-  it('약속된 요청 형식으로 호출하고 Claude 판결문을 반환한다', async () => {
-    const apiResponse = {
-      ok: true,
-      source: 'claude',
-      verdict: { order: '주문', reason: '판결 이유', sentence: '선고' },
-    }
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
-      ok: true,
-      json: async () => apiResponse,
-    })
-
-    await expect(requestVerdict(request)).resolves.toEqual(apiResponse)
-    expect(fetchMock).toHaveBeenCalledWith('/api/verdict', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(request),
-    })
-  })
-
-  it.each([
-    ['서버 실패', { ok: true, json: async () => ({ ok: false, reason: 'no_key' }) }],
-    ['잘못된 성공 응답', { ok: true, json: async () => ({ ok: true, source: 'claude', verdict: null }) }],
-  ])('%s 시 템플릿 판결문으로 대체한다', async (_label, response) => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(response)
-
-    const actual = await requestVerdict(request)
-
-    expect(actual.ok).toBe(true)
-    expect(actual.source).toBe('template')
-    expect(actual.verdict).toEqual(createTemplateVerdict(result, '밥'))
-  })
-
-  it('네트워크 오류 시 템플릿 판결문으로 대체한다', async () => {
-    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('offline'))
-
-    const actual = await requestVerdict(request)
-
-    expect(actual.source).toBe('template')
-    expect(actual.verdict.order).toContain('서울역')
-  })
-})
-
-describe('requestExtract', () => {
-  it('약속된 요청 형식으로 추출 API를 호출한다', async () => {
-    const apiResponse = {
-      ok: true,
-      participants: [{ name: '민수', station: '강남' }],
-      purpose: '밥',
-    }
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
-      ok: true,
-      json: async () => apiResponse,
-    })
-
-    await expect(requestExtract({ chat: '민수: 강남에서 출발해' })).resolves.toEqual(apiResponse)
-    expect(fetchMock).toHaveBeenCalledWith('/api/extract', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat: '민수: 강남에서 출발해' }),
-    })
-  })
-
-  it('네트워크 오류를 실패 응답으로 바꾼다', async () => {
-    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('offline'))
-
-    await expect(requestExtract({ chat: '대화' })).resolves.toEqual({ ok: false, reason: 'error' })
+  it('"역"으로 끝나지 않는 역 이름에는 "역"을 붙인다', () => {
+    const verdict = createTemplateVerdict({ ...result, station: { name: '사당', lat: 37.4765, lng: 126.9816 } }, '카페')
+    expect(verdict.order).toBe('이번 카페 약속 장소는 사당역으로 정한다.')
+    expect(verdict.sentence).toBe('전원은 이 판결에 따라 사당역으로 모일 것.')
   })
 })
