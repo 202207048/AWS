@@ -1,6 +1,44 @@
-# 개발2(계산·데이터)에게
+# 개발2(계산·데이터·지도)에게
 
 > 최신 항목이 맨 위입니다. 끝낸 항목은 `dev2-calc`에 커밋·푸시해 주세요.
+
+---
+
+## 2026-11-18 #2 — 2-1 검토 결과 + 지도 기능 추가 (우선순위 변경)
+
+**검토한 커밋:** `aa3aa8a feat: align ranking calculation contract`
+
+### 잘 된 점
+- `rankStations(participants, stations, { mode = 'fair' } = {})` 생략 가능, `weightedScore`, `travelTime`, `roundedMinutes`/`straightLineDistance` export 유지 — 계약대로입니다.
+
+### 바로 고칠 것 (2-1 마무리)
+1. **`npm test` 실패 1건:** `src/ranking.test.js`의 "30개 역을 점수가 낮은 순서로 정렬한다"가 없어진 `score` 필드를 검사합니다. `weightedScore` 기준으로 바꾸고, **fair / weighted 두 모드 각각 정렬 테스트**를 추가하세요.
+2. **정렬 비교를 분 단위 반올림 값으로:** `compareFair`, `compareWeighted`에서 `Math.round(a.maxTime) - Math.round(b.maxTime)`처럼 반올림 값을 비교하세요 (PLAN 5-1). 지금은 소수점까지 비교해서 두 번째 기준(편차)이 사실상 쓰이지 않습니다.
+
+### 새 작업 순서 (시간이 부족해서 바뀜)
+1. 위 2-1 마무리 → 커밋·푸시
+2. **2-2 기존 방식 계산** (`src/baseline.js` + 테스트)
+3. **`main` 받기 → `npm install`** (개발1이 `leaflet`, `react-leaflet`을 `main`에 올림. 아래 확인 방법 참고)
+4. **4-3 지도 컴포넌트 + 4-4 주변 장소 모듈** — `PLAN.md` 17절 전체를 그대로 따를 것
+5. **2-6 데모 조합 찾기 스크립트** — 현재 잠실·강남·수원·합정은 기존 방식과 판결이 **둘 다 사당역**이라 비교 장면이 안 됩니다. 결과가 갈리는 조합을 꼭 찾아 주세요.
+6. 시간이 남으면 2-3~2-5 지하철 그래프 (남지 않으면 직선거리 유지)
+
+지도 패키지가 `main`에 올라왔는지 확인:
+
+```bash
+git fetch origin
+git show origin/main:package.json
+```
+
+`"leaflet"`과 `"react-leaflet"`이 보이면 3번을 진행합니다. 아직이면 4-4(`src/places.js`)부터 먼저 만들어도 됩니다 (패키지 불필요).
+
+### Kiro에 붙여넣을 문구
+
+```text
+handoff/TO_DEV2.md(origin/main)의 2026-11-18 #2 항목대로 해줘.
+"바로 고칠 것" → "새 작업 순서" 1번부터 하나씩. 지도는 PLAN.md 17절을 그대로 따르고 묻지 마.
+작업 하나가 끝날 때마다 npm test 결과와 바뀐 파일을 보여주고 멈춰.
+```
 
 ---
 

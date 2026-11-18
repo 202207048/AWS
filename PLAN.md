@@ -66,7 +66,7 @@
 | 담당 | 맡는 일 | 혼자 수정하는 파일 (다른 사람은 수정 금지) |
 |---|---|---|
 | **개발1 — 서버·Claude** | 버전 고정, API 서버, Claude 판결문·단톡 추출 | `server/**`, `vite.config.js`, `package.json`, `package-lock.json`, `.env.example`, `README.md` |
-| **개발2 — 계산·데이터** | 지하철 데이터, 그래프 계산, 순위, 기존 방식 계산, 데모 조합 찾기 | `src/ranking.js`, `src/graph.js`, `src/baseline.js`, `src/stations.js`, `src/data/**`, `src/ranking.test.js`, `src/graph.test.js`, `src/baseline.test.js`, `src/data/*.test.js`, `scripts/**` |
+| **개발2 — 계산·데이터·지도** | 지하철 데이터, 그래프 계산, 순위, 기존 방식 계산, 데모 조합 찾기, 지도 컴포넌트(17절) | `src/ranking.js`, `src/graph.js`, `src/baseline.js`, `src/stations.js`, `src/data/**`, `src/ranking.test.js`, `src/graph.test.js`, `src/baseline.test.js`, `src/data/*.test.js`, `scripts/**`, `src/MapView.jsx`, `src/MapView.css`, `src/places.js`, `src/places.test.js` |
 | **개발3 — 화면** | 단톡 입력 화면, 비교 화면, 판결문 표시, API 호출, 공유 메시지 | `src/App.jsx`, `src/styles.css`, `src/api.js`, `src/api.test.js`, `src/mockCalc.js`, `src/sampleChat.js`, `src/verdict.js`, `src/verdict.test.js` |
 
 - 패키지 추가가 필요하면 **개발1에게 요청**한다 (`package.json` 충돌 방지).
@@ -295,3 +295,67 @@ PLAN.md를 읽고 "개발N" 담당 작업만 해줘.
 
 - 기대 결과: 민수=잠실, 지영=강남, 현우=수원, 서연=null(힌트 "일산"), 목적=밥
 - 데모용 최종 출발지 조합은 2-6 스크립트 결과를 보고 바꿀 수 있다 (바꾸면 두 파일 모두 수정).
+
+## 17. 추가 기능: 지도 + 주변 장소 (개발1·개발2)
+
+판결된 역을 **지도**로 보여 주고, 그 근처의 **카페 / 음식점 / 놀 곳**을 실제 데이터로 보여 준다.
+
+### 데이터 출처 (정직성 규칙 적용)
+
+- 지도 타일: OpenStreetMap (키 불필요). 지도 아래에 `© OpenStreetMap contributors` 표기 필수.
+- 주변 장소: **실제 데이터만** 쓴다. AI가 가게 이름을 만들지 않는다.
+  - `.env`에 `KAKAO_REST_API_KEY`가 있으면 카카오 로컬 API (국내 데이터가 가장 풍부)
+  - 없으면 OpenStreetMap 검색(Nominatim). 국내 가게가 일부 빠질 수 있으므로 화면에 "OpenStreetMap 기준, 일부 누락 가능" 표기
+- **데모 안정성:** 30개 역 × 3분류 결과를 미리 받아 `server/data/places-cache.json`에 저장해 두고, 서버는 캐시를 먼저 쓴다. 인터넷이 끊겨도 지도 아래 목록은 나온다 (지도 타일은 인터넷 필요).
+
+### API (개발1이 만들고, 개발2가 호출)
+
+```json
+GET /api/places?station=사당&category=cafe        // category: cafe | food | play
+응답 성공: {
+  "ok": true,
+  "source": "kakao | osm",
+  "station": { "name": "사당", "lat": 37.4765, "lng": 126.9816 },
+  "radius": 500,
+  "category": "cafe",
+  "places": [
+    { "name": "가게 이름", "lat": 37.47, "lng": 126.98, "distance": 120, "address": "주소 또는 null", "url": "상세 링크 또는 null" }
+  ]
+}
+응답 실패: { "ok": false, "reason": "unknown_station | bad_category | unavailable" }
+```
+
+- 분류: `cafe` = 카페, `food` = 음식점·패스트푸드, `play` = 영화관·노래방·공원 등 놀 곳.
+- `places`는 가까운 순, 최대 15개. `distance`는 역에서의 직선거리(m, 정수).
+- 이 API는 Claude 키가 없어도 동작한다.
+
+### 역할
+
+| # | 담당 | 작업 | 파일 | 완료 기준 |
+|---|---|---|---|---|
+| 4-1 | 개발1 | `/api/places` + 카카오/OSM 데이터 수집 + 캐시 | `server/places.js`, `server/places.test.js`, `server/index.js`, `server/scripts/prefetch-places.js`, `server/data/places-cache.json` | 30개 역 캐시 생성, 캐시 우선 응답, 외부 호출 mock 테스트 통과 |
+| 4-2 | 개발1 | 지도 패키지 추가 | `package.json`, `package-lock.json` | `leaflet`, `react-leaflet` 정확한 버전 고정 |
+| 4-3 | 개발2 | 지도 컴포넌트 | `src/MapView.jsx`, `src/MapView.css` | 아래 props로 지도 표시. `npm run build` 통과 + 브라우저 확인 |
+| 4-4 | 개발2 | 주변 장소 호출 모듈 | `src/places.js`, `src/places.test.js` | `fetchPlaces(station, category)`가 `/api/places`를 부르고, 실패 시 `{ ok: false }`를 돌려주며 예외를 던지지 않음 |
+| 4-5 | 개발3 | 화면에 붙이기 (합칠 때) | `src/App.jsx` | 판결 카드 아래에 `<MapView ... />` 한 줄 추가 |
+
+### MapView props (개발2가 만들고, 개발3이 사용)
+
+```jsx
+<MapView
+  winner={StationResult}          // 판결된 역 (빨간 마커, 지도 중심)
+  baseline={StationResult | null} // 기존 방식 역 (회색 마커, 판결과 같으면 생략)
+  origins={[{ id, station: { name, lat, lng } }]} // 출발역 (번호 마커)
+/>
+```
+
+- 지도 높이 280px, 모바일 폭에 맞춤. 판결 역 중심, 출발역이 모두 보이도록 범위 자동 조정.
+- 지도 위에 "카페 / 음식점 / 놀 곳" 탭. 탭을 누르면 `fetchPlaces(winner.station.name, category)` 결과를 지도 마커 + 아래 목록(이름, 거리 m)으로 표시.
+- 실패하거나 결과가 0개면 "주변 장소 정보를 불러오지 못했어요" 한 줄만 표시 (지도는 그대로).
+- 목록 아래 출처 표기: `source`가 `osm`이면 "OpenStreetMap 기준, 일부 누락 가능", `kakao`면 "카카오맵 기준".
+- Leaflet 기본 마커 이미지 경로 문제를 피하려고 `L.divIcon`(CSS 원형 마커)을 쓴다.
+
+### 주의
+
+- 4-3·4-4는 개발1의 `/api/places`가 합쳐지기 전에도 만들 수 있다. 서버가 없으면 `fetchPlaces`가 `{ ok: false }`를 돌려주고 화면은 안내 문구만 표시한다.
+- 지도 패키지(4-2)는 개발1이 `main`에 먼저 올린다. 개발2는 그다음 `main`을 받아 `npm install` 후 시작한다.
