@@ -1,0 +1,258 @@
+/* 판결 역 지도 + 주변 장소 (PLAN 17절). 모든 규칙은 .map-view 아래에만 적용한다. */
+
+.map-view {
+  --map-view-accent: #8e2026;
+  --map-view-ink: #2b2722;
+  --map-view-muted: #8a8279;
+  --map-view-line: #e6dfd4;
+  --map-view-cafe: #9a5b2c;
+  --map-view-food: #d9822b;
+  --map-view-play: #2f7d5b;
+  margin-top: 16px;
+  color: var(--map-view-ink);
+}
+
+.map-view__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.map-view__tabs {
+  display: flex;
+  gap: 6px;
+}
+
+.map-view__tab,
+.map-view__zoom {
+  min-height: 34px;
+  padding: 7px 13px;
+  border: 1px solid var(--map-view-line);
+  border-radius: 99px;
+  color: #5f584f;
+  background: #fff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.map-view__tab.is-active {
+  border-color: var(--map-view-accent);
+  color: var(--map-view-accent);
+  background: #fcf2f1;
+  box-shadow: inset 0 0 0 1px var(--map-view-accent);
+}
+
+.map-view__zoom {
+  padding-inline: 11px;
+  color: #776e64;
+  background: #f5f1ea;
+  font-size: 11px;
+}
+
+.map-view__tab:focus-visible,
+.map-view__zoom:focus-visible {
+  outline: 3px solid rgba(142, 32, 38, 0.25);
+  outline-offset: 1px;
+}
+
+.map-view__map {
+  position: relative;
+  isolation: isolate;
+  width: 100%;
+  height: 280px;
+  overflow: hidden;
+  border: 1px solid var(--map-view-line);
+  border-radius: 15px;
+  background: #eee9e1;
+}
+
+.map-view .map-view__leaflet {
+  width: 100%;
+  height: 100%;
+  font: inherit;
+}
+
+/* divIcon 마커: Leaflet 기본 흰 상자 대신 CSS 원형 */
+.map-view .map-view-pin {
+  border: 0;
+  background: transparent;
+}
+
+.map-view .map-view-pin span {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  place-items: center;
+  border-radius: 99px;
+}
+
+.map-view .map-view-pin--winner span {
+  border: 3px solid #fff;
+  background: var(--map-view-accent);
+  box-shadow: 0 0 0 2px var(--map-view-accent), 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+/* 기존 방식 역: 회색 고리. 같은 역에서 출발하는 사람의 번호 마커가 고리 안에 보이도록 가운데를 비운다. */
+.map-view .map-view-pin--baseline span {
+  border: 5px solid #8f8a84;
+  background: rgba(143, 138, 132, 0.18);
+  box-shadow: 0 0 0 2px #fff, 0 1px 5px rgba(0, 0, 0, 0.3);
+}
+
+.map-view .map-view-pin--origin span {
+  border: 2px solid #fff;
+  color: #fff;
+  background: #2f2a25;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.map-view .map-view-pin--place span {
+  border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+
+.map-view .map-view-pin--cafe span { background: var(--map-view-cafe); }
+.map-view .map-view-pin--food span { background: var(--map-view-food); }
+.map-view .map-view-pin--play span { background: var(--map-view-play); }
+
+.map-view .map-view-label {
+  padding: 3px 7px;
+  border-radius: 7px;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.map-view .map-view-label--winner {
+  border-color: var(--map-view-accent);
+  color: #fff;
+  background: var(--map-view-accent);
+}
+
+.map-view .map-view-label--winner::before {
+  border-top-color: var(--map-view-accent);
+}
+
+.map-view .map-view-label--baseline {
+  color: #5f5a54;
+  background: #f5f3f0;
+  font-weight: 700;
+}
+
+.map-view__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 8px 2px 0;
+  padding: 0;
+  list-style: none;
+  color: #776e64;
+  font-size: 11px;
+}
+
+.map-view__legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.map-view__swatch,
+.map-view__dot {
+  display: inline-block;
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.map-view__swatch--winner { background: var(--map-view-accent); }
+.map-view__swatch--baseline { box-sizing: border-box; border: 3px solid #8f8a84; background: rgba(143, 138, 132, 0.18); }
+.map-view__swatch--origin { background: #2f2a25; }
+.map-view__swatch--cafe,
+.map-view__dot--cafe { background: var(--map-view-cafe); }
+.map-view__swatch--food,
+.map-view__dot--food { background: var(--map-view-food); }
+.map-view__swatch--play,
+.map-view__dot--play { background: var(--map-view-play); }
+
+.map-view__places {
+  margin-top: 12px;
+}
+
+.map-view__status {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  color: #736a60;
+  background: #f5f1ea;
+  font-size: 13px;
+}
+
+.map-view__list {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--map-view-line);
+  border-radius: 15px;
+  list-style: none;
+  background: #fff;
+}
+
+.map-view__item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 13px;
+  font-size: 13px;
+}
+
+.map-view__item + .map-view__item {
+  border-top: 1px solid #f0ebe3;
+}
+
+.map-view__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 700;
+}
+
+.map-view__name a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: #cfc6ba;
+  text-underline-offset: 3px;
+}
+
+.map-view__name a:hover {
+  color: var(--map-view-accent);
+}
+
+.map-view__distance {
+  flex: none;
+  color: var(--map-view-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.map-view__note {
+  margin: 7px 4px 0;
+  color: var(--map-view-muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+@media (max-width: 380px) {
+  .map-view__tab { padding-inline: 10px; }
+}
