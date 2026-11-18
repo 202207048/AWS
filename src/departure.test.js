@@ -8,7 +8,7 @@ describe('departureTime', () => {
   })
 
   it('자정을 넘기면 전날 시각으로 감는다', () => {
-    expect(departureTime('00:20', 30)).toBe('23:45')
+    expect(departureTime('00:20', 30)).toBe('전날 23:45')
   })
 
   it('잘못된 입력이면 null', () => {

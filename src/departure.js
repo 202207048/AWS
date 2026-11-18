@@ -22,5 +22,7 @@ export function formatClock(totalMinutes) {
 export function departureTime(meetingTime, travelMinutes, buffer = DEPARTURE_BUFFER_MINUTES) {
   const meeting = parseClock(meetingTime)
   if (meeting === null || !Number.isFinite(travelMinutes)) return null
-  return formatClock(meeting - Math.round(travelMinutes) - buffer)
+  const departure = meeting - Math.round(travelMinutes) - buffer
+  // 자정을 넘겨 전날 출발해야 하면 "전날"을 붙인다
+  return departure < 0 ? `전날 ${formatClock(departure)}` : formatClock(departure)
 }

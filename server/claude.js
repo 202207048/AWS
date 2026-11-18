@@ -17,7 +17,7 @@ const VERDICT_SYSTEM = [
   '사용자가 준 계산 결과만 근거로 판결문을 쓴다.',
   '규칙:',
   '- 한국어로 쓴다.',
-  '- 시간(분) 숫자는 사용자가 준 값만 그대로 쓴다. 새 숫자를 만들거나 계산하지 않는다.',
+  '- 시간(분) 숫자는 사용자가 준 값만 그대로 쓴다. 새 숫자를 만들거나 계산하지 않는다. 여유 시간·간격 같은 다른 "N분" 표현도 쓰지 않는다.',
   '- 이동시간은 추정치이므로 실제 교통 정보인 것처럼 단정하지 않는다.',
   '- order는 한 문장, reason은 1~2문장, sentence는 한 문장으로 짧게 쓴다.',
 ].join('\n')
@@ -33,7 +33,7 @@ export function normalizePurposes({ purpose, purposes, purposeNote } = {}) {
     .slice(0, 3)
   const note =
     typeof purposeNote === 'string'
-      ? purposeNote.replace(/[\r\n<>]/g, ' ').replace(/\d+/g, '').replace(/\s+/g, ' ').trim().slice(0, MAX_NOTE_CHARS)
+      ? purposeNote.replace(/[\r\n<>]/g, ' ').replace(/\d+\s*분/g, '').replace(/\s+/g, ' ').trim().slice(0, MAX_NOTE_CHARS)
       : ''
   return { list: list.length ? list : PURPOSES.has(purpose) ? [purpose] : [], note }
 }
@@ -79,7 +79,8 @@ export function allowedMinutes(ranked) {
 export function minutesMatch(verdict, ranked) {
   const allowed = allowedMinutes(ranked)
   const text = `${verdict.order}\n${verdict.reason}\n${verdict.sentence}`
-  for (const match of text.matchAll(/(\d+)\s*분/g)) {
+  // 정수 "N분"만 검사한다 ("11.4분", "10분의 1" 같은 표현은 계산값 비교 대상이 아님)
+  for (const match of text.matchAll(/(?<![\d.])(\d+)\s*분(?!의)/g)) {
     if (!allowed.has(Number(match[1]))) return false
   }
   return true
