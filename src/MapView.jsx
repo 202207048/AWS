@@ -252,7 +252,7 @@ function MapViewContent({ winner, baseline, origins, categories, initialCategory
                   [station.lat, station.lng],
                   [baseline.station.lat, baseline.station.lng],
                 ]}
-                pathOptions={{ color: '#8f8a84', weight: 1.5, opacity: 0.55, dashArray: '4 6', interactive: false }}
+                pathOptions={{ color: '#6f6a64', weight: 2, opacity: 0.75, dashArray: '5 6', interactive: false }}
               />
             ))}
 

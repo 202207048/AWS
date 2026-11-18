@@ -710,6 +710,16 @@ function App() {
             )}
           </div>
 
+          {/* 지도를 결과 맨 위에 두어 "누가 어디서 몇 분"을 먼저 보여 준다 */}
+          {winnerResult && (
+            <MapView
+              winner={winnerResult}
+              baseline={baselineResult}
+              origins={participantsWithStation}
+              categoryOrder={categoryOrder}
+            />
+          )}
+
           <div className="table-wrap">
             <table>
               <thead>
@@ -866,15 +876,6 @@ function App() {
               </>
             )}
           </article>
-
-          {winnerResult && (
-            <MapView
-              winner={winnerResult}
-              baseline={baselineResult}
-              origins={participantsWithStation}
-              categoryOrder={categoryOrder}
-            />
-          )}
         </section>
       )}
 
