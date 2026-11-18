@@ -1,7 +1,7 @@
 import { createClaudeClient, generateVerdict } from './claude.js'
+import { extractFromChat } from './extract.js'
 
 const NO_KEY_RESPONSE = Object.freeze({ ok: false, reason: 'no_key' })
-const NOT_IMPLEMENTED_RESPONSE = Object.freeze({ ok: false, reason: 'error' })
 
 function hasApiKey(apiKey) {
   return typeof apiKey === 'string' && apiKey.trim().length > 0
@@ -21,8 +21,9 @@ export function createService({ apiKey, client } = {}) {
       return generateVerdict(claude, request)
     },
 
-    async extract(_request) {
-      return claude ? NOT_IMPLEMENTED_RESPONSE : NO_KEY_RESPONSE
+    async extract(request) {
+      if (!claude) return NO_KEY_RESPONSE
+      return extractFromChat(claude, request)
     },
   })
 }

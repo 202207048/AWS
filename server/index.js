@@ -1,8 +1,21 @@
+import { readFileSync } from 'node:fs'
 import { createServer } from 'node:http'
-import { resolve } from 'node:path'
+import { dirname, resolve } from 'node:path'
 import { loadEnvFile } from 'node:process'
-import { pathToFileURL } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+import { createPlacesService } from './places.js'
 import { createService } from './service.js'
+
+const SERVER_DIR = dirname(fileURLToPath(import.meta.url))
+export const PLACES_CACHE_PATH = resolve(SERVER_DIR, 'data', 'places-cache.json')
+
+export function loadPlacesCache(path = PLACES_CACHE_PATH) {
+  try {
+    return JSON.parse(readFileSync(path, 'utf8'))
+  } catch {
+    return null
+  }
+}
 
 const DEFAULT_HOST = '127.0.0.1'
 const DEFAULT_PORT = 8787
@@ -41,11 +54,27 @@ async function readJson(request) {
   return body ? JSON.parse(body) : {}
 }
 
-export function createApiServer({ apiKey } = {}) {
+export function createApiServer({ apiKey, kakaoKey, placesCache, fetchImpl } = {}) {
   const service = createService({ apiKey })
+  const getPlaces = createPlacesService({ kakaoKey, cache: placesCache, fetchImpl })
 
   return createServer(async (request, response) => {
-    const pathname = new URL(request.url ?? '/', 'http://localhost').pathname
+    const url = new URL(request.url ?? '/', 'http://localhost')
+    const pathname = url.pathname
+
+    if (pathname === '/api/places') {
+      if (request.method !== 'GET') {
+        sendJson(response, 405, { ok: false, reason: 'error' })
+        return
+      }
+      const result = await getPlaces({
+        station: url.searchParams.get('station'),
+        category: url.searchParams.get('category'),
+      })
+      sendJson(response, 200, result)
+      return
+    }
+
     const serviceMethod = ROUTES[pathname]
 
     if (!serviceMethod) {
@@ -82,7 +111,11 @@ export function startApiServer({
 } = {}) {
   loadLocalEnv()
 
-  const server = createApiServer({ apiKey: process.env.ANTHROPIC_API_KEY })
+  const server = createApiServer({
+    apiKey: process.env.ANTHROPIC_API_KEY,
+    kakaoKey: process.env.KAKAO_REST_API_KEY,
+    placesCache: loadPlacesCache(),
+  })
   server.listen(port, host, () => {
     console.log(`API server listening on http://${host}:${port}`)
   })
