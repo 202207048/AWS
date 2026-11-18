@@ -52,6 +52,11 @@ function round(value) {
   return Math.round(Number(value))
 }
 
+/** 화면에 보이는 시간 차이: 반올림한 최대 시간 - 반올림한 최소 시간 (src/verdict.js displayGap과 같은 규칙) */
+function displayGap(result) {
+  return round(result.maxTime) - round(result.minTime)
+}
+
 function isValidVerdictRequest(request) {
   return (
     Array.isArray(request?.ranked) &&
@@ -69,6 +74,8 @@ export function allowedMinutes(ranked) {
     for (const key of ['maxTime', 'minTime', 'spread']) {
       if (Number.isFinite(Number(result[key]))) allowed.add(round(result[key]))
     }
+    const gap = displayGap(result)
+    if (Number.isFinite(gap)) allowed.add(gap)
     for (const time of result.times) {
       if (Number.isFinite(Number(time?.minutes))) allowed.add(round(time.minutes))
     }
@@ -110,7 +117,7 @@ function buildVerdictPrompt({ purpose, purposes, purposeNote, mode, participants
       })
       .join(' / ')
     lines.push(
-      `${index + 1}위 ${stationLabel(result.station.name)}: 가장 오래 걸리는 사람 ${round(result.maxTime)}분, 시간 차이 ${round(result.spread)}분 (${times})`,
+      `${index + 1}위 ${stationLabel(result.station.name)}: 가장 오래 걸리는 사람 ${round(result.maxTime)}분, 시간 차이 ${displayGap(result)}분 (${times})`,
     )
   })
 

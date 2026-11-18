@@ -9,10 +9,16 @@ export function originLabel(station) {
   return station.kind === 'place' ? station.name : stationLabel(station.name)
 }
 
+// 화면에 보이는 시간 차이: 반올림해 보여 주는 최대·최소 시간의 차이와 일치시킨다.
+// (ranking.js의 spread는 정렬용 원값이므로 그대로 둔다.)
+export function displayGap(result) {
+  return Math.round(result.maxTime) - Math.round(result.minTime)
+}
+
 export function createTemplateVerdict(result, purpose) {
   const station = stationLabel(result.station.name)
   const maxTime = Math.round(result.maxTime)
-  const spread = Math.round(result.spread)
+  const spread = displayGap(result)
 
   return {
     order: `이번 ${purpose} 약속 장소는 ${station}으로 정한다.`,

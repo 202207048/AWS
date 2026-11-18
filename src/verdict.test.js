@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createTemplateVerdict, stationLabel } from './verdict.js'
+import { createTemplateVerdict, displayGap, stationLabel } from './verdict.js'
 
 const result = {
   station: { name: '서울역', lat: 37.5547, lng: 126.9706 },
@@ -22,11 +22,21 @@ describe('stationLabel', () => {
   })
 })
 
+describe('displayGap', () => {
+  it('화면에 보이는 반올림 최대·최소 시간의 차이를 돌려준다', () => {
+    // 25.6 → 26, 22.4 → 22: 원값 차이 3.2(→3)지만 화면에는 26 · 22이므로 차이 4
+    expect(displayGap({ maxTime: 25.6, minTime: 22.4, spread: 3.2 })).toBe(4)
+    // 26.4 → 26, 21.5 → 22: Math.round(spread 4.9) = 5가 아니라 4
+    expect(displayGap({ maxTime: 26.4, minTime: 21.5, spread: 4.9 })).toBe(4)
+    expect(displayGap(result)).toBe(7)
+  })
+})
+
 describe('템플릿 판결문', () => {
   it('API와 같은 주문, 판결 이유, 선고 구조를 반환한다', () => {
     expect(createTemplateVerdict(result, '밥')).toEqual({
       order: '이번 밥 약속 장소는 서울역으로 정한다.',
-      reason: '누구도 약 38분을 넘기지 않고, 이동시간 차이도 약 8분에 그친다. 한 사람의 희생으로 세운 약속은 오래가지 못한다는 점도 참작했다.',
+      reason: '누구도 약 38분을 넘기지 않고, 이동시간 차이도 약 7분에 그친다. 한 사람의 희생으로 세운 약속은 오래가지 못한다는 점도 참작했다.',
       sentence: '전원은 이 판결에 따라 서울역으로 모일 것.',
     })
   })

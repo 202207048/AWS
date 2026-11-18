@@ -4,7 +4,7 @@ import { rankStations } from './ranking.js'
 import { baselineStation } from './baseline.js'
 import MapView from './MapView.jsx'
 import { extractErrorMessage, requestExtract, requestGeocode, requestVerdict } from './api.js'
-import { originLabel, stationLabel } from './verdict.js'
+import { displayGap, originLabel, stationLabel } from './verdict.js'
 import { SAMPLE_CHATS } from './sampleChats.js'
 import {
   MAX_PURPOSE_NOTE,
@@ -88,7 +88,7 @@ function createShareMessage(result, participants, purpose, meetingTime) {
     '[약속 장소 판사]',
     `${purpose} 약속 장소: ${stationLabel(result.station.name)}${meetingTime ? ` (${meetingTime}까지)` : ''}`,
     ...participantLines,
-    `가장 오래 걸리는 사람 ${Math.round(result.maxTime)}분 · 사람 사이 시간 차이 ${Math.round(result.spread)}분`,
+    `가장 오래 걸리는 사람 ${Math.round(result.maxTime)}분 · 사람 사이 시간 차이 ${displayGap(result)}분`,
     `※ 이동시간과 환승 횟수는 추정치입니다.${meetingTime ? ` 출발 시각은 ${DEPARTURE_BUFFER_MINUTES}분 여유를 포함합니다.` : ''}`,
   ].join('\n')
 }
@@ -740,7 +740,7 @@ function App() {
                       </td>
                     ))}
                     <td className="criteria-cell">
-                      <strong>{Math.round(result.maxTime)}분 · 차이 {Math.round(result.spread)}분</strong>
+                      <strong>{Math.round(result.maxTime)}분 · 차이 {displayGap(result)}분</strong>
                     </td>
                   </tr>
                 ))}
@@ -774,7 +774,7 @@ function App() {
                     </div>
                     <div>
                       <dt>시간 차이</dt>
-                      <dd>{Math.round(baselineResult.spread)}분</dd>
+                      <dd>{displayGap(baselineResult)}분</dd>
                     </div>
                   </dl>
                 </article>
@@ -790,7 +790,7 @@ function App() {
                     </div>
                     <div>
                       <dt>시간 차이</dt>
-                      <dd>{Math.round(winnerResult.spread)}분</dd>
+                      <dd>{displayGap(winnerResult)}분</dd>
                     </div>
                   </dl>
                 </article>

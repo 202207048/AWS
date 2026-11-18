@@ -1,6 +1,6 @@
 import { APIConnectionTimeoutError } from '@anthropic-ai/sdk'
 import { describe, expect, it, vi } from 'vitest'
-import { CLAUDE_MODEL, generateVerdict, minutesMatch, normalizePurposes, stationLabel } from './claude.js'
+import { allowedMinutes, CLAUDE_MODEL, generateVerdict, minutesMatch, normalizePurposes, stationLabel } from './claude.js'
 
 describe('normalizePurposes', () => {
   it('우선순위 최대 3개, 중복·알 수 없는 값 제거, 메모의 숫자·꺾쇠 제거', () => {
@@ -138,5 +138,28 @@ describe('generateVerdict', () => {
 describe('minutesMatch', () => {
   it('반올림한 계산값(38, 22, 16)은 허용한다', () => {
     expect(minutesMatch(goodVerdict, request.ranked)).toBe(true)
+  })
+})
+
+describe('allowedMinutes', () => {
+  it('기존 반올림 값과 화면용 시간 차이(round(max) - round(min))를 모두 허용한다', () => {
+    const ranked = [
+      {
+        station: { name: '사당' },
+        times: [
+          { participantId: 1, minutes: 26.4 },
+          { participantId: 2, minutes: 21.5 },
+        ],
+        maxTime: 26.4,
+        minTime: 21.5,
+        spread: 4.9,
+      },
+    ]
+    const allowed = allowedMinutes(ranked)
+    expect(allowed.has(26)).toBe(true)
+    expect(allowed.has(22)).toBe(true)
+    expect(allowed.has(5)).toBe(true) // round(spread)
+    expect(allowed.has(4)).toBe(true) // 26 - 22
+    expect(minutesMatch({ order: '', reason: '26분과 22분, 차이 4분', sentence: '' }, ranked)).toBe(true)
   })
 })
