@@ -9,7 +9,8 @@ const TILE_URL = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
 const TILE_ATTRIBUTION = '&copy; OpenStreetMap contributors'
 const DEFAULT_CATEGORY = 'cafe'
 const DEFAULT_RADIUS_M = 500
-const FIT_PADDING = [32, 32]
+// 위쪽은 판결 역 이름표, 아래쪽은 기존 방식 이름표가 잘리지 않도록 여유를 더 준다.
+const FIT_PADDING = { paddingTopLeft: [36, 58], paddingBottomRight: [36, 44] }
 const FIT_MAX_ZOOM = 15
 const NEAR_ZOOM = 16
 
@@ -73,6 +74,11 @@ function isSafeLink(url) {
   return typeof url === 'string' && /^https?:\/\//i.test(url)
 }
 
+// '서울역'처럼 이름이 이미 '역'으로 끝나면 다시 붙이지 않는다.
+function withStationSuffix(name) {
+  return name.endsWith('역') ? name : `${name}역`
+}
+
 function hasCoordinates(station) {
   return Number.isFinite(station?.lat) && Number.isFinite(station?.lng)
 }
@@ -95,13 +101,14 @@ function FitView({ pointsKey, view, center }) {
   const [centerLat, centerLng] = center
 
   useEffect(() => {
+    // 애니메이션 없이 바로 맞춘다. 애니메이션 중에 다시 맞추거나 탭이 백그라운드면 확대가 중간에 멈추는 경우가 있다.
     if (view === 'near') {
-      map.setView([centerLat, centerLng], NEAR_ZOOM)
+      map.setView([centerLat, centerLng], NEAR_ZOOM, { animate: false })
       return
     }
     const points = JSON.parse(pointsKey)
     if (points.length === 0) return
-    map.fitBounds(L.latLngBounds(points), { padding: FIT_PADDING, maxZoom: FIT_MAX_ZOOM })
+    map.fitBounds(L.latLngBounds(points), { ...FIT_PADDING, maxZoom: FIT_MAX_ZOOM, animate: false })
   }, [map, pointsKey, view, centerLat, centerLng])
 
   return null
@@ -161,7 +168,7 @@ function MapViewContent({ winner, baseline, origins }) {
   }
 
   return (
-    <section className="map-view" aria-label={`${winnerName}역 지도와 주변 장소`}>
+    <section className="map-view" aria-label={`${withStationSuffix(winnerName)} 지도와 주변 장소`}>
       <div className="map-view__toolbar">
         <div className="map-view__tabs" role="tablist" aria-label="주변 장소 분류">
           {PLACE_CATEGORIES.map(({ id, label }) => (
@@ -271,7 +278,7 @@ function MapViewContent({ winner, baseline, origins }) {
       </div>
 
       <p className="map-view__note">
-        {winnerName}역 반경 {radius}m
+        {withStationSuffix(winnerName)} 반경 {radius}m
         {!loading && places.length > 0 && sourceNote ? ` · ${sourceNote}` : ''}
       </p>
       <p className="map-view__note">지도 © OpenStreetMap contributors</p>
