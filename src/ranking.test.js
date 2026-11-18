@@ -99,3 +99,18 @@ describe('후보역 순위', () => {
     expect(() => rankStations(participants, STATIONS, { mode: 'cheap' })).toThrow()
   })
 })
+
+describe('주소 검색으로 고른 출발지', () => {
+  it('장소 좌표로 이동시간을 추정하고, 같은 이름이어도 장소는 0분으로 보지 않는다', async () => {
+    const { travelTimeFromOrigin } = await import('./ranking.js')
+    const gangnam = STATIONS.find((item) => item.name === '강남')
+    const place = { name: '강남', lat: gangnam.lat, lng: gangnam.lng, kind: 'place' }
+    expect(travelTimeFromOrigin(place, gangnam)).toEqual({ minutes: 10, transfers: 0 })
+    expect(travelTimeFromOrigin(gangnam, gangnam)).toEqual({ minutes: 0, transfers: 0 })
+
+    const ilsan = { name: '일산동구', lat: 37.6584, lng: 126.7742, kind: 'place' }
+    const results = rankStations([{ id: 1, station: ilsan }, { id: 2, station: gangnam }], STATIONS)
+    expect(results).toHaveLength(STATIONS.length)
+    expect(results[0].times[0].minutes).toBeGreaterThan(10)
+  })
+})

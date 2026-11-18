@@ -58,6 +58,18 @@ export function travelTime(fromName, toName) {
   }
 }
 
+/**
+ * 출발지(역 또는 주소 검색으로 고른 장소)에서 후보역까지의 이동시간.
+ * 장소는 { name, lat, lng, kind: 'place' } 형태이며 좌표로 직선거리 추정을 한다.
+ * 같은 역끼리만 0분으로 본다.
+ */
+export function travelTimeFromOrigin(origin, station) {
+  if (origin?.kind !== 'place' && stationByName.has(origin?.name)) {
+    return travelTime(origin.name, station.name)
+  }
+  return { minutes: estimateTravelMinutes(origin, station), transfers: 0 }
+}
+
 export function roundedMinutes(minutes) {
   return Math.round(minutes)
 }
@@ -74,7 +86,7 @@ export function roundedWeightedScoreKey(weightedScore) {
 export function buildStationResult(participants, station) {
   const times = participants.map((participant) => ({
     participantId: participant.id,
-    ...travelTime(participant.station.name, station.name),
+    ...travelTimeFromOrigin(participant.station, station),
   }))
   const minuteValues = times.map(({ minutes }) => minutes)
   const maxTime = Math.max(...minuteValues)

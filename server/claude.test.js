@@ -1,6 +1,15 @@
 import { APIConnectionTimeoutError } from '@anthropic-ai/sdk'
 import { describe, expect, it, vi } from 'vitest'
-import { CLAUDE_MODEL, generateVerdict, minutesMatch, stationLabel } from './claude.js'
+import { CLAUDE_MODEL, generateVerdict, minutesMatch, normalizePurposes, stationLabel } from './claude.js'
+
+describe('normalizePurposes', () => {
+  it('우선순위 최대 3개, 중복·알 수 없는 값 제거, 메모의 숫자·꺾쇠 제거', () => {
+    expect(
+      normalizePurposes({ purposes: ['카페', '밥', '카페', '노래', '술', '공부'], purposeNote: '<b>조용한 곳</b> 30분 이내' }),
+    ).toEqual({ list: ['카페', '밥', '술'], note: 'b 조용한 곳 /b 분 이내' })
+    expect(normalizePurposes({ purpose: '밥' })).toEqual({ list: ['밥'], note: '' })
+  })
+})
 
 describe('stationLabel', () => {
   it('"역"을 한 번만 붙인다', () => {

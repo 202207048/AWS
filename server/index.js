@@ -3,6 +3,7 @@ import { createServer } from 'node:http'
 import { dirname, resolve } from 'node:path'
 import { loadEnvFile } from 'node:process'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { createGeocodeService } from './geocode.js'
 import { createPlacesService } from './places.js'
 import { createService } from './service.js'
 
@@ -57,10 +58,20 @@ async function readJson(request) {
 export function createApiServer({ apiKey, kakaoKey, placesCache, fetchImpl } = {}) {
   const service = createService({ apiKey })
   const getPlaces = createPlacesService({ kakaoKey, cache: placesCache, fetchImpl })
+  const geocode = createGeocodeService({ kakaoKey, fetchImpl })
 
   return createServer(async (request, response) => {
     const url = new URL(request.url ?? '/', 'http://localhost')
     const pathname = url.pathname
+
+    if (pathname === '/api/geocode') {
+      if (request.method !== 'GET') {
+        sendJson(response, 405, { ok: false, reason: 'error' })
+        return
+      }
+      sendJson(response, 200, await geocode({ q: url.searchParams.get('q') }))
+      return
+    }
 
     if (pathname === '/api/places') {
       if (request.method !== 'GET') {
