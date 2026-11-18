@@ -577,7 +577,7 @@ function App() {
         />
         <div className="privacy-note">
           <span aria-hidden="true">🔒</span>
-          대화 내용은 저장하지 않습니다.
+          대화 내용은 저장하지 않으며, 정리를 위해 AI(Claude)로만 전송됩니다.
           {sample && sample.chat === chat && (
             <span className="sample-caption">예시 {sample.number}/{SAMPLE_CHATS.length} · {sample.title}</span>
           )}
