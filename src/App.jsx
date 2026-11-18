@@ -130,6 +130,7 @@ function App() {
   const [isJudging, setIsJudging] = useState(false)
   const nextId = useRef(3)
   const extractionVersion = useRef(0)
+  const latestSearchQuery = useRef({})
   const calculationVersion = useRef(0)
   const sampleDeck = useRef([])
   const lastSampleIndex = useRef(null)
@@ -180,7 +181,15 @@ function App() {
     setIsJudging(false)
   }
 
+  // 사람이 출발지를 직접 바꾸면 진행 중인 AI 정리 결과가 나중에 덮어쓰지 않도록 취소한다
+  const cancelExtraction = () => {
+    extractionVersion.current += 1
+    setIsExtracting(false)
+  }
+
   const setStation = (id, station) => {
+    cancelExtraction()
+    setExtractStatus(null)
     setParticipants((current) =>
       current.map((participant) =>
         participant.id === id ? { ...participant, station, hint: null } : participant,
@@ -211,8 +220,11 @@ function App() {
       updateSearch(id, { open: true, message: '찾을 주소나 장소 이름을 입력해 주세요.', results: null })
       return
     }
+    latestSearchQuery.current[id] = query
     updateSearch(id, { open: true, query, loading: true, message: null, results: null })
     const response = await requestGeocode(query)
+    // 그사이 다른 검색어로 바꿨다면 늦게 온 결과는 버린다
+    if (latestSearchQuery.current[id] !== undefined && latestSearchQuery.current[id] !== query) return
     if (response.ok && response.results.length > 0) {
       updateSearch(id, { loading: false, results: response.results, source: response.source })
     } else {
@@ -239,6 +251,7 @@ function App() {
 
   const addParticipant = () => {
     if (participants.length >= 6) return
+    cancelExtraction()
     const id = nextId.current++
     setParticipants((current) => [...current, { id, station: null }])
     invalidateResults()
@@ -246,6 +259,7 @@ function App() {
 
   const removeParticipant = (id) => {
     if (participants.length <= 2) return
+    cancelExtraction()
     setParticipants((current) => current.filter((participant) => participant.id !== id))
     invalidateResults()
   }
@@ -688,7 +702,7 @@ function App() {
           </div>
           <div className="mode-explainer">
             <p><strong>가장 먼 사람 기준</strong> · 아무도 너무 멀리 오지 않게</p>
-            <p><strong>전체 균형 기준</strong> · 다 같이 비슷하게 오도록</p>
+            <p><strong>전체 균형 기준</strong> · 다 같이 비슷하게 오도록 (대신 모두 조금 더 걸릴 수 있어요)</p>
             {modeWinners && modeWinners.fair !== modeWinners.weighted && (
               <p className="mode-diff">
                 이번에는 기준에 따라 결과가 달라요 · {MODE_LABELS.fair} {modeWinners.fair} / {MODE_LABELS.weighted} {modeWinners.weighted}
