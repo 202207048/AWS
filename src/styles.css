@@ -462,3 +462,6 @@ td { vertical-align: top; }
 .meeting-time-field input { border: 0; border-left: 1px solid #e7e0d7; border-radius: 0; font-size: 15px; }
 .judge-button { border-radius: 14px; font-size: 17px; }
 .ruling-card h4 { color: #8e2026; font-size: 24px; }
+
+/* 한글 단어 중간 줄바꿈 방지 */
+body { word-break: keep-all; overflow-wrap: anywhere; }

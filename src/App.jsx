@@ -719,7 +719,7 @@ function App() {
                     {result.times.map(({ participantId, minutes, transfers }) => (
                       <td className="time-cell" key={participantId}>
                         약 {Math.round(minutes)}분
-                        <small>환승 {transfers}회</small>
+                        {transfers > 0 && <small>환승 {transfers}회</small>}
                         {rank === 0 && departureById.get(participantId) && (
                           <small className="departure-inline">{departureById.get(participantId)} 출발</small>
                         )}

@@ -5,9 +5,9 @@ import 'leaflet/dist/leaflet.css'
 import './MapView.css'
 import { PLACE_CATEGORIES, fetchPlaces } from './places.js'
 
-// 깔끔한 밝은 지도 (CARTO Voyager). 출처 표기는 지도 아래 문구로 대신한다 (라이선스상 표기 필수).
-const TILE_URL = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'
-const TILE_ATTRIBUTION = '&copy; OpenStreetMap contributors &copy; CARTO'
+// OpenStreetMap 기본 타일. 출처 표기는 지도 아래 문구로 대신한다 (라이선스상 표기 필수).
+const TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
+const TILE_ATTRIBUTION = '&copy; OpenStreetMap contributors'
 const DEFAULT_CATEGORY = 'cafe'
 const DEFAULT_RADIUS_M = 500
 // 위쪽은 판결 역 이름표, 아래쪽은 기존 방식 이름표가 잘리지 않도록 여유를 더 준다.
@@ -207,7 +207,7 @@ function MapViewContent({ winner, baseline, origins, categories, initialCategory
           attributionControl={false}
           className="map-view__leaflet"
         >
-          <TileLayer url={TILE_URL} attribution={TILE_ATTRIBUTION} subdomains="abcd" />
+          <TileLayer url={TILE_URL} attribution={TILE_ATTRIBUTION} />
           <FitView pointsKey={pointsKey} view={view} center={[winnerStation.lat, winnerStation.lng]} />
 
           {originGroups.map(({ station, label, numbers }) => (
@@ -309,7 +309,7 @@ function MapViewContent({ winner, baseline, origins, categories, initialCategory
         {withStationSuffix(winnerName)} 반경 {radius}m
         {!loading && places.length > 0 && sourceNote ? ` · ${sourceNote}` : ''}
       </p>
-      <p className="map-view__note">지도 데이터 © OpenStreetMap contributors · © CARTO</p>
+      <p className="map-view__note">지도 데이터 © OpenStreetMap contributors</p>
     </section>
   )
 }
