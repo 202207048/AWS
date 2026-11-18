@@ -835,8 +835,8 @@ function App() {
                   </dl>
                 </article>
                 <article className="comparison-card ruling-card">
-                  <span className="method-label">우리 판결</span>
-                  <span className="recommended-badge">추천</span>
+                  <span className="method-label">{mode === 'weighted' ? '전체 균형 기준으로 보면' : '우리 판결'}</span>
+                  {mode !== 'weighted' && <span className="recommended-badge">추천</span>}
                   <h4>{stationLabel(winnerResult.station.name)}</h4>
                   <p>{modeCopy.ruling}</p>
                   <dl>
