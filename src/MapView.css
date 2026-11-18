@@ -140,9 +140,15 @@
   font-size: 10px;
 }
 
-.map-view .map-view-label--origin::before {
-  border-right-color: var(--map-view-person, #2f2a25);
-}
+.map-view .map-view-label--origin.leaflet-tooltip-right::before { border-right-color: var(--map-view-person, #2f2a25); }
+.map-view .map-view-label--origin.leaflet-tooltip-left::before { border-left-color: var(--map-view-person, #2f2a25); }
+.map-view .map-view-label--origin.leaflet-tooltip-top::before { border-top-color: var(--map-view-person, #2f2a25); }
+.map-view .map-view-label--origin.leaflet-tooltip-bottom::before { border-bottom-color: var(--map-view-person, #2f2a25); }
+
+/* 라벨이 겹치면 판결 > 기존 방식 > 출발역 순으로 위에 보이게 한다. */
+.map-view .map-view-label--origin { z-index: 1; }
+.map-view .map-view-label--baseline { z-index: 2; }
+.map-view .map-view-label--winner { z-index: 3; }
 
 .map-view .map-view-pin--place span {
   border: 2px solid #fff;

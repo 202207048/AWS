@@ -444,6 +444,28 @@ td { vertical-align: top; }
 
 @media (max-width: 480px) {
   .purpose-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+  /* 순위표: 순위·후보역은 왼쪽, 핵심 열(가장 오래 · 시간 차이)은 오른쪽에 고정하고 가운데 시간 열만 가로로 스크롤한다. */
+  .table-wrap { overflow-x: auto; }
+  .table-wrap th:first-child,
+  .table-wrap td:first-child,
+  .table-wrap th:nth-child(2),
+  .table-wrap td:nth-child(2),
+  .table-wrap th:last-child,
+  .table-wrap td:last-child { position: sticky; z-index: 1; background: #fff; }
+  .table-wrap th:first-child,
+  .table-wrap th:nth-child(2),
+  .table-wrap th:last-child { z-index: 2; background: #f5f1ea; }
+  .table-wrap .winner-row td:first-child,
+  .table-wrap .winner-row td:nth-child(2),
+  .table-wrap .winner-row td:last-child { background: #fdf7ed; }
+  .table-wrap th:first-child,
+  .table-wrap td:first-child { left: 0; box-sizing: border-box; width: 38px; min-width: 38px; max-width: 38px; padding-inline: 7px; }
+  .table-wrap th:nth-child(2),
+  .table-wrap td:nth-child(2) { left: 38px; box-shadow: 6px 0 8px -6px rgba(62, 47, 31, 0.22); }
+  .table-wrap th:last-child,
+  .table-wrap td:last-child { right: 0; box-shadow: -6px 0 8px -6px rgba(62, 47, 31, 0.22); }
+  .table-wrap th:last-child { white-space: normal; }
 }
 
 /* ---------- 목업 느낌 맞추기: 한 줄 목록, 와인색 번호, 채워진 선택 칩 ---------- */

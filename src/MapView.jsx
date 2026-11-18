@@ -66,6 +66,15 @@ const originIcon = (label, colorIndex) =>
     }),
   )
 
+// 출발역 라벨이 서로·판결/기존 방식 라벨과 덜 겹치도록 사람(출발역 묶음)마다 방향을 돌린다.
+// 출발 마커의 tooltipAnchor가 [0, -11]이라 좌우·아래 방향은 y를 보정한다 (left는 Leaflet이 offset을 뒤집지 않으므로 음수).
+const ORIGIN_LABEL_SPOTS = [
+  { direction: 'right', offset: [12, 11] },
+  { direction: 'left', offset: [-12, 11] },
+  { direction: 'bottom', offset: [0, 26] },
+  { direction: 'top', offset: [0, -2] },
+]
+
 const placeIcon = (category) =>
   cachedIcon(`place:${category}`, () =>
     L.divIcon({
@@ -236,7 +245,7 @@ function MapViewContent({ winner, baseline, origins, categories, initialCategory
         <MapContainer
           center={[winnerStation.lat, winnerStation.lng]}
           zoom={12}
-          scrollWheelZoom={false}
+          scrollWheelZoom={true}
           attributionControl={false}
           className="map-view__leaflet"
         >
@@ -270,7 +279,7 @@ function MapViewContent({ winner, baseline, origins, categories, initialCategory
             ),
           )}
 
-          {originGroups.map(({ station, label, indexes }) => (
+          {originGroups.map(({ station, label, indexes }, groupIndex) => (
             <Marker
               key={`origin-${station.name}`}
               position={[station.lat, station.lng]}
@@ -278,8 +287,8 @@ function MapViewContent({ winner, baseline, origins, categories, initialCategory
               zIndexOffset={2000}
             >
               <Tooltip
-                direction="right"
-                offset={[8, 0]}
+                key={ORIGIN_LABEL_SPOTS[groupIndex % ORIGIN_LABEL_SPOTS.length].direction}
+                {...ORIGIN_LABEL_SPOTS[groupIndex % ORIGIN_LABEL_SPOTS.length]}
                 permanent
                 className={`map-view-label map-view-label--origin ${colorClass(indexes[0])}`}
               >
