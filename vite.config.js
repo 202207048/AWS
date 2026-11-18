@@ -10,6 +10,8 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: webPort,
+    // 시연용 임시 공개 주소(Cloudflare quick tunnel)로 접속할 수 있게 허용
+    allowedHosts: ['.trycloudflare.com'],
     proxy: {
       '/api': {
         target: `http://127.0.0.1:${apiPort}`,
