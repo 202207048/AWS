@@ -1,6 +1,13 @@
 import { APIConnectionTimeoutError } from '@anthropic-ai/sdk'
 import { describe, expect, it, vi } from 'vitest'
-import { CLAUDE_MODEL, generateVerdict, minutesMatch } from './claude.js'
+import { CLAUDE_MODEL, generateVerdict, minutesMatch, stationLabel } from './claude.js'
+
+describe('stationLabel', () => {
+  it('"역"을 한 번만 붙인다', () => {
+    expect(stationLabel('사당')).toBe('사당역')
+    expect(stationLabel('서울역')).toBe('서울역')
+  })
+})
 
 const request = {
   purpose: '밥',

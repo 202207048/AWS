@@ -28,6 +28,11 @@ export function createClaudeClient(apiKey) {
   return new Anthropic({ apiKey, timeout: TIMEOUT_MS, maxRetries: 0 })
 }
 
+/** "서울역"처럼 이미 "역"으로 끝나는 이름에 "역"을 또 붙이지 않는다 */
+export function stationLabel(name) {
+  return String(name).endsWith('역') ? String(name) : `${name}역`
+}
+
 function round(value) {
   return Math.round(Number(value))
 }
@@ -86,11 +91,11 @@ function buildVerdictPrompt({ purpose, mode, participants, ranked }) {
       })
       .join(' / ')
     lines.push(
-      `${index + 1}위 ${result.station.name}역: 최대 ${round(result.maxTime)}분, 편차 ${round(result.spread)}분 (${times})`,
+      `${index + 1}위 ${stationLabel(result.station.name)}: 최대 ${round(result.maxTime)}분, 편차 ${round(result.spread)}분 (${times})`,
     )
   })
 
-  lines.push('', `1위인 ${ranked[0].station.name}역으로 판결문을 써라.`)
+  lines.push('', `1위인 ${stationLabel(ranked[0].station.name)}으로 판결문을 써라.`)
   return lines.join('\n')
 }
 
