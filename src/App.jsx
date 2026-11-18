@@ -901,11 +901,9 @@ function App() {
                     <p>{verdict.verdict.sentence}</p>
                   </section>
                 </div>
-                <p className="source-note">
-                  {verdict.source === 'claude'
-                    ? 'Claude 작성 · 표시된 숫자는 계산 결과를 바탕으로 합니다.'
-                    : '기본 판결문 · AI 서버를 사용할 수 없어 템플릿으로 표시했습니다.'}
-                </p>
+                {verdict.source !== 'claude' && (
+                  <p className="source-note">기본 판결문 · AI 서버를 사용할 수 없어 템플릿으로 표시했습니다.</p>
+                )}
                 <div className="share-actions">
                   <button className="share-button" type="button" onClick={copyShareMessage}>
                     <span aria-hidden="true">▣</span>
