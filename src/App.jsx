@@ -1,26 +1,69 @@
 import { useRef, useState } from 'react'
 import { PURPOSES, STATIONS } from './stations.js'
-import { rankStations, roundedMinutes } from './ranking.js'
-import { generateVerdict } from './verdict.js'
+import { baselineStation, rankStations } from './mockCalc.js'
+import { requestExtract, requestVerdict } from './api.js'
 
 const initialParticipants = [
   { id: 1, station: STATIONS[0] },
   { id: 2, station: STATIONS[1] },
 ]
 
+function createShareMessage(result, participants, purpose) {
+  const participantLines = participants.map((participant, index) => {
+    const estimate = result.times.find(({ participantId }) => participantId === participant.id)
+    const name = participant.name ?? `참여자 ${index + 1}`
+    return `${name} (${participant.station.name} 출발): 약 ${Math.round(estimate.minutes)}분 · 환승 ${estimate.transfers}회`
+  })
+
+  return [
+    '[약속 장소 판사]',
+    `${purpose} 약속 장소: ${result.station.name}역`,
+    ...participantLines,
+    `최대 ${Math.round(result.maxTime)}분 · 편차 ${Math.round(result.spread)}분`,
+    '※ 이동시간과 환승 횟수는 추정치입니다.',
+  ].join('\n')
+}
+
+async function copyText(text) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text)
+    return
+  }
+
+  const textarea = document.createElement('textarea')
+  textarea.value = text
+  textarea.setAttribute('readonly', '')
+  textarea.style.position = 'fixed'
+  textarea.style.opacity = '0'
+  document.body.appendChild(textarea)
+  textarea.select()
+  const copied = document.execCommand('copy')
+  document.body.removeChild(textarea)
+  if (!copied) throw new Error('클립보드 복사 실패')
+}
+
 function App() {
   const [participants, setParticipants] = useState(initialParticipants)
   const [purpose, setPurpose] = useState('밥')
+  const [chat, setChat] = useState('')
+  const [extractStatus, setExtractStatus] = useState(null)
+  const [isExtracting, setIsExtracting] = useState(false)
   const [results, setResults] = useState([])
+  const [baselineResult, setBaselineResult] = useState(null)
   const [verdict, setVerdict] = useState(null)
+  const [copyStatus, setCopyStatus] = useState(null)
   const [isJudging, setIsJudging] = useState(false)
   const nextId = useRef(3)
+  const extractionVersion = useRef(0)
   const calculationVersion = useRef(0)
+  const hasUnresolvedStation = participants.some((participant) => !participant.station)
 
   const invalidateResults = () => {
     calculationVersion.current += 1
     setResults([])
+    setBaselineResult(null)
     setVerdict(null)
+    setCopyStatus(null)
     setIsJudging(false)
   }
 
@@ -28,7 +71,11 @@ function App() {
     setParticipants((current) =>
       current.map((participant) =>
         participant.id === id
-          ? { ...participant, station: STATIONS.find((station) => station.name === stationName) }
+          ? {
+              ...participant,
+              station: STATIONS.find((station) => station.name === stationName),
+              hint: null,
+            }
           : participant,
       ),
     )
@@ -38,10 +85,7 @@ function App() {
   const addParticipant = () => {
     if (participants.length >= 6) return
     const id = nextId.current++
-    setParticipants((current) => [
-      ...current,
-      { id, station: STATIONS[(current.length * 4) % STATIONS.length] },
-    ])
+    setParticipants((current) => [...current, { id, station: null }])
     invalidateResults()
   }
 
@@ -56,25 +100,98 @@ function App() {
     invalidateResults()
   }
 
+  const extractChat = async () => {
+    const trimmedChat = chat.trim()
+    if (!trimmedChat || isExtracting) return
+
+    const version = extractionVersion.current + 1
+    extractionVersion.current = version
+    setIsExtracting(true)
+    setExtractStatus(null)
+
+    const response = await requestExtract({ chat: trimmedChat })
+    if (extractionVersion.current !== version) return
+
+    setIsExtracting(false)
+    if (!response.ok || !Array.isArray(response.participants) || response.participants.length === 0) {
+      setExtractStatus({
+        type: 'error',
+        message: '대화를 분석하지 못했습니다. 아래에서 출발역을 직접 선택해 주세요.',
+      })
+      return
+    }
+
+    const extractedParticipants = response.participants.slice(0, 6).map((item, index) => ({
+      id: nextId.current++,
+      name: typeof item.name === 'string' && item.name.trim() ? item.name.trim() : `참여자 ${index + 1}`,
+      station: STATIONS.find((station) => station.name === item.station) ?? null,
+      hint: typeof item.hint === 'string' ? item.hint : null,
+    }))
+
+    while (extractedParticipants.length < 2) {
+      extractedParticipants.push({ id: nextId.current++, station: null })
+    }
+
+    setParticipants(extractedParticipants)
+    if (PURPOSES.some((item) => item.value === response.purpose)) {
+      setPurpose(response.purpose)
+    }
+    invalidateResults()
+
+    const unresolvedCount = extractedParticipants.filter((participant) => !participant.station).length
+    setExtractStatus({
+      type: unresolvedCount > 0 ? 'warning' : 'success',
+      message: unresolvedCount > 0
+        ? `${extractedParticipants.length}명을 찾았습니다. 표시된 ${unresolvedCount}명의 출발역을 직접 골라 주세요.`
+        : `${extractedParticipants.length}명의 출발역을 채웠습니다. 아래에서 결과를 확인해 주세요.`,
+    })
+  }
+
   const judgeMeetingPlace = async () => {
+    if (hasUnresolvedStation) return
+
     const version = calculationVersion.current + 1
     calculationVersion.current = version
     const ranked = rankStations(participants, STATIONS).slice(0, 3)
+    const baseline = baselineStation(participants, STATIONS)
 
     setResults(ranked)
+    setBaselineResult(baseline)
     setVerdict(null)
+    setCopyStatus(null)
     setIsJudging(true)
 
-    const generated = await generateVerdict(
-      ranked[0],
+    const generated = await requestVerdict({
       purpose,
-      participants,
-      import.meta.env.VITE_GEMINI_API_KEY,
-    )
+      participants: participants.map(({ id, station }) => ({ id, stationName: station.name })),
+      ranked: ranked.map(({ station, times, maxTime, minTime, spread, totalTransfers = 0 }) => ({
+        station,
+        times: times.map(({ participantId, minutes, transfers = 0 }) => ({
+          participantId,
+          minutes,
+          transfers,
+        })),
+        maxTime,
+        minTime,
+        spread,
+        totalTransfers,
+      })),
+    })
 
     if (calculationVersion.current === version) {
       setVerdict(generated)
       setIsJudging(false)
+    }
+  }
+
+  const copyShareMessage = async () => {
+    if (!results[0]) return
+
+    try {
+      await copyText(createShareMessage(results[0], participants, purpose))
+      setCopyStatus('copied')
+    } catch {
+      setCopyStatus('error')
     }
   }
 
@@ -87,37 +204,88 @@ function App() {
         <p className="hero-copy">거리와 형평성을 따져 가장 공평한 역을 판결합니다.</p>
       </header>
 
-      <section className="panel input-panel" aria-labelledby="participants-title">
+      <section className="panel chat-panel" aria-labelledby="chat-title">
         <div className="section-heading">
           <div>
             <span className="step">01</span>
-            <h2 id="participants-title">누가 어디서 오나요?</h2>
+            <h2 id="chat-title">단톡으로 한 번에 입력</h2>
+          </div>
+          <span className="ai-badge">AI 정리</span>
+        </div>
+        <p className="chat-description">출발지와 약속 목적이 담긴 대화를 그대로 붙여넣으세요.</p>
+        <label className="sr-only" htmlFor="chat-input">단체 대화 내용</label>
+        <textarea
+          id="chat-input"
+          value={chat}
+          onChange={(event) => setChat(event.target.value)}
+          placeholder={'민수: 나는 강남에서 출발해\n지영: 난 홍대입구! 저녁 먹자'}
+          rows="5"
+        />
+        <div className="privacy-note">
+          <span aria-hidden="true">🔒</span>
+          대화 내용은 저장하지 않습니다.
+        </div>
+        <button
+          className="extract-button"
+          type="button"
+          onClick={extractChat}
+          disabled={!chat.trim() || isExtracting}
+        >
+          {isExtracting ? '대화 정리 중…' : '참여자와 목적 찾아보기'}
+        </button>
+        {extractStatus && (
+          <p className={`extract-status ${extractStatus.type}`} role="status">
+            {extractStatus.message}
+          </p>
+        )}
+      </section>
+
+      <section className="panel input-panel" aria-labelledby="participants-title">
+        <div className="section-heading">
+          <div>
+            <span className="step">02</span>
+            <h2 id="participants-title">출발역 확인</h2>
           </div>
           <span className="count">{participants.length} / 6명</span>
         </div>
 
         <div className="participant-list">
           {participants.map((participant, index) => (
-            <div className="participant-row" key={participant.id}>
+            <div
+              className={`participant-row ${participant.station ? '' : 'needs-station'}`}
+              key={participant.id}
+            >
               <span className="person-badge" aria-hidden="true">{index + 1}</span>
-              <label className="sr-only" htmlFor={`station-${participant.id}`}>
-                참여자 {index + 1} 출발역
-              </label>
-              <select
-                id={`station-${participant.id}`}
-                value={participant.station.name}
-                onChange={(event) => updateStation(participant.id, event.target.value)}
-              >
-                {STATIONS.map((station) => (
-                  <option key={station.name} value={station.name}>{station.name}역</option>
-                ))}
-              </select>
+              <div className="participant-field">
+                {participant.name && <span className="person-name">{participant.name}</span>}
+                <label className="sr-only" htmlFor={`station-${participant.id}`}>
+                  {participant.name ?? `참여자 ${index + 1}`} 출발역
+                </label>
+                <select
+                  id={`station-${participant.id}`}
+                  value={participant.station?.name ?? ''}
+                  onChange={(event) => updateStation(participant.id, event.target.value)}
+                  aria-invalid={!participant.station}
+                >
+                  <option value="" disabled>출발역을 선택하세요</option>
+                  {STATIONS.map((station) => (
+                    <option key={station.name} value={station.name}>{station.name}역</option>
+                  ))}
+                </select>
+                {!participant.station && (
+                  <span className="station-warning">
+                    {participant.hint
+                      ? `“${participant.hint}”에 해당하는 후보역을 직접 선택해 주세요.`
+                      : '판결 전에 출발역을 선택해 주세요.'}
+                  </span>
+                )}
+              </div>
               <button
                 className="remove-button"
                 type="button"
                 onClick={() => removeParticipant(participant.id)}
                 disabled={participants.length <= 2}
-                aria-label={`참여자 ${index + 1} 삭제`}
+                aria-label={`${participant.name ?? `참여자 ${index + 1}`} 삭제`}
                 title={participants.length <= 2 ? '최소 2명이 필요합니다' : '참여자 삭제'}
               >
                 ×
@@ -133,14 +301,14 @@ function App() {
           disabled={participants.length >= 6}
         >
           <span aria-hidden="true">＋</span>
-          {participants.length >= 6 ? '최대 6명까지 가능해요' : '참여자 추가'}
+          {participants.length >= 6 ? '최대 6명까지 가능해요' : '참여자 직접 추가'}
         </button>
       </section>
 
       <section className="panel" aria-labelledby="purpose-title">
         <div className="section-heading">
           <div>
-            <span className="step">02</span>
+            <span className="step">03</span>
             <h2 id="purpose-title">이번 약속의 목적은?</h2>
           </div>
         </div>
@@ -160,17 +328,28 @@ function App() {
         </div>
       </section>
 
-      <button className="judge-button" type="button" onClick={judgeMeetingPlace} disabled={isJudging}>
+      <button
+        className="judge-button"
+        type="button"
+        onClick={judgeMeetingPlace}
+        disabled={isJudging || hasUnresolvedStation}
+        title={hasUnresolvedStation ? '모든 참여자의 출발역을 선택해 주세요' : undefined}
+      >
         <span aria-hidden="true">⚖</span>
-        {isJudging ? '판결문 작성 중…' : '공평한 장소 판결하기'}
+        {isJudging
+          ? '판결문 작성 중…'
+          : hasUnresolvedStation
+            ? '출발역을 모두 선택해 주세요'
+            : '공평한 장소 판결하기'}
       </button>
 
       {results.length > 0 && (
         <section className="results" aria-live="polite">
           <div className="result-title">
-            <span className="step">03</span>
+            <span className="step">04</span>
             <h2>공평도 순위</h2>
-            <p>낮은 점수일수록 이동 부담과 시간 차이가 작아요.</p>
+            <span className="estimate-badge">추정치</span>
+            <p>최대 이동시간을 먼저 줄이고, 같으면 참여자 간 편차가 작은 역을 골랐어요.</p>
           </div>
 
           <div className="table-wrap">
@@ -181,11 +360,11 @@ function App() {
                   <th>후보역</th>
                   {participants.map((participant, index) => (
                     <th key={participant.id}>
-                      참여자 {index + 1}
+                      {participant.name ?? `참여자 ${index + 1}`}
                       <small>{participant.station.name} 출발</small>
                     </th>
                   ))}
-                  <th>공평 점수</th>
+                  <th>판결 기준</th>
                 </tr>
               </thead>
               <tbody>
@@ -193,10 +372,16 @@ function App() {
                   <tr className={rank === 0 ? 'winner-row' : ''} key={result.station.name}>
                     <td><span className={`rank rank-${rank + 1}`}>{rank + 1}</span></td>
                     <td className="station-cell">{result.station.name}역</td>
-                    {result.times.map(({ participantId, minutes }) => (
-                      <td key={participantId}>약 {roundedMinutes(minutes)}분</td>
+                    {result.times.map(({ participantId, minutes, transfers }) => (
+                      <td className="time-cell" key={participantId}>
+                        약 {Math.round(minutes)}분
+                        <small>환승 {transfers}회</small>
+                      </td>
                     ))}
-                    <td className="score-cell">{result.score.toFixed(1)}</td>
+                    <td className="criteria-cell">
+                      <strong>최대 {Math.round(result.maxTime)}분</strong>
+                      <small>편차 {Math.round(result.spread)}분</small>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -204,8 +389,54 @@ function App() {
           </div>
 
           <p className="formula-note">
-            이동시간 = 직선거리 × 2.5분 + 10분 · 점수 = 최대시간 × 0.7 + 시간차 × 0.3
+            현재는 같은 역 0분, 그 외 직선거리 × 2.5분 + 기본 10분으로 계산한 추정치입니다.
+            최대 이동시간이 짧은 순, 같으면 편차가 작은 순으로 정렬합니다.
           </p>
+
+          {baselineResult && (
+            <section className="comparison" aria-labelledby="comparison-title">
+              <div className="comparison-heading">
+                <div>
+                  <span className="comparison-kicker">WHY THIS PLACE?</span>
+                  <h3 id="comparison-title">기존 방식과 비교</h3>
+                </div>
+                <p>같은 이동시간 추정치로 비교했어요.</p>
+              </div>
+              <div className="comparison-grid">
+                <article className="comparison-card baseline-card">
+                  <span className="method-label">기존 방식</span>
+                  <h4>{baselineResult.station.name}역</h4>
+                  <p>출발 좌표의 평균점에서 가장 가까운 역</p>
+                  <dl>
+                    <div>
+                      <dt>최대</dt>
+                      <dd>{Math.round(baselineResult.maxTime)}분</dd>
+                    </div>
+                    <div>
+                      <dt>편차</dt>
+                      <dd>{Math.round(baselineResult.spread)}분</dd>
+                    </div>
+                  </dl>
+                </article>
+                <article className="comparison-card ruling-card">
+                  <span className="method-label">우리 판결</span>
+                  <span className="recommended-badge">추천</span>
+                  <h4>{results[0].station.name}역</h4>
+                  <p>최대 이동시간을 줄이고 편차까지 비교한 역</p>
+                  <dl>
+                    <div>
+                      <dt>최대</dt>
+                      <dd>{Math.round(results[0].maxTime)}분</dd>
+                    </div>
+                    <div>
+                      <dt>편차</dt>
+                      <dd>{Math.round(results[0].spread)}분</dd>
+                    </div>
+                  </dl>
+                </article>
+              </div>
+            </section>
+          )}
 
           <article className="verdict-card">
             <div className="verdict-header">
@@ -220,12 +451,40 @@ function App() {
               <div className="verdict-loading" role="status">
                 <span className="loading-dot" /> 판결문을 작성하고 있습니다…
               </div>
-            ) : (
+            ) : verdict && (
               <>
-                <p className="verdict-text">{verdict?.text}</p>
-                {verdict?.source === 'template' && (
-                  <p className="source-note">기본 판결문 · Gemini 키가 없거나 호출에 실패했습니다.</p>
-                )}
+                <div className="verdict-sections">
+                  <section>
+                    <h3>주문</h3>
+                    <p>{verdict.verdict.order}</p>
+                  </section>
+                  <section>
+                    <h3>판결 이유</h3>
+                    <p>{verdict.verdict.reason}</p>
+                  </section>
+                  <section>
+                    <h3>선고</h3>
+                    <p>{verdict.verdict.sentence}</p>
+                  </section>
+                </div>
+                <p className="source-note">
+                  {verdict.source === 'claude'
+                    ? 'Claude 작성 · 표시된 숫자는 계산 결과를 바탕으로 합니다.'
+                    : '기본 판결문 · AI 서버를 사용할 수 없어 템플릿으로 표시했습니다.'}
+                </p>
+                <div className="share-actions">
+                  <button className="share-button" type="button" onClick={copyShareMessage}>
+                    <span aria-hidden="true">▣</span>
+                    판결 결과 복사
+                  </button>
+                  {copyStatus && (
+                    <p className={`copy-status ${copyStatus}`} role="status">
+                      {copyStatus === 'copied'
+                        ? '클립보드에 복사했습니다.'
+                        : '복사하지 못했습니다. 브라우저 권한을 확인해 주세요.'}
+                    </p>
+                  )}
+                </div>
               </>
             )}
           </article>
