@@ -445,3 +445,20 @@ td { vertical-align: top; }
 @media (max-width: 480px) {
   .purpose-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
+
+/* ---------- 목업 느낌 맞추기: 한 줄 목록, 와인색 번호, 채워진 선택 칩 ---------- */
+.participant-list { gap: 0; overflow: hidden; border: 1px solid #ded6cb; border-radius: 14px; background: #fff; }
+.participant-row { padding: 10px 10px 10px 12px; }
+.participant-row + .participant-row { border-top: 1px solid #eee8df; }
+.participant-row.needs-station { margin: 0; border: 0; border-radius: 0; background: #fff7f5; }
+.participant-row + .participant-row.needs-station { border-top: 1px solid #eee8df; }
+.person-badge { width: 30px; height: 30px; background: #8e2026; font-size: 13px; font-weight: 600; }
+.participant-row select { height: 42px; border-radius: 99px; }
+.purpose-button { border-color: #d9d1c7; color: #4e463d; }
+.purpose-button.selected { border-color: #8e2026; color: #fff; background: #8e2026; }
+.purpose-button.selected .purpose-rank { color: #8e2026; background: #fff; }
+.meeting-time-field { grid-template-columns: minmax(0, 1fr) auto auto; padding: 8px 8px 8px 14px; border: 1px solid #ded6cb; border-radius: 14px; background: #fff; }
+.meeting-time-field > span { grid-column: auto; color: #2b2722; font-size: 13px; }
+.meeting-time-field input { border: 0; border-left: 1px solid #e7e0d7; border-radius: 0; font-size: 15px; }
+.judge-button { border-radius: 14px; font-size: 17px; }
+.ruling-card h4 { color: #8e2026; font-size: 24px; }
