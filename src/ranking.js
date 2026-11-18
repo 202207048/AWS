@@ -58,16 +58,59 @@ export function travelTime(fromName, toName) {
   }
 }
 
+export function roundedMinutes(minutes) {
+  return Math.round(minutes)
+}
+
+/**
+ * 가중 점수 정렬용 키. 화면은 가중 점수를 소수 첫째 자리(toFixed(1))로 보여 주므로
+ * 0.1점 단위로 반올림한 정수(점수 × 10)로 비교한다.
+ */
+export function roundedWeightedScoreKey(weightedScore) {
+  return Math.round(weightedScore * 10)
+}
+
+/** 한 후보역에 대해 참여자별 이동시간과 요약값(StationResult)을 만든다. */
+export function buildStationResult(participants, station) {
+  const times = participants.map((participant) => ({
+    participantId: participant.id,
+    ...travelTime(participant.station.name, station.name),
+  }))
+  const minuteValues = times.map(({ minutes }) => minutes)
+  const maxTime = Math.max(...minuteValues)
+  const minTime = Math.min(...minuteValues)
+  const spread = maxTime - minTime
+
+  return {
+    station,
+    times,
+    maxTime,
+    minTime,
+    spread,
+    totalTransfers: times.reduce((total, { transfers }) => total + transfers, 0),
+    weightedScore: maxTime * 0.7 + spread * 0.3,
+  }
+}
+
 function compareByStationName(a, b) {
   return a.station.name.localeCompare(b.station.name, 'ko')
 }
 
+// 정렬 비교는 화면에 보이는 반올림 값으로 한다 (PLAN 5-1). 저장되는 값은 반올림하지 않는다.
 function compareFair(a, b) {
-  return a.maxTime - b.maxTime || a.spread - b.spread || compareByStationName(a, b)
+  return (
+    roundedMinutes(a.maxTime) - roundedMinutes(b.maxTime) ||
+    roundedMinutes(a.spread) - roundedMinutes(b.spread) ||
+    compareByStationName(a, b)
+  )
 }
 
 function compareWeighted(a, b) {
-  return a.weightedScore - b.weightedScore || a.maxTime - b.maxTime || compareByStationName(a, b)
+  return (
+    roundedWeightedScoreKey(a.weightedScore) - roundedWeightedScoreKey(b.weightedScore) ||
+    roundedMinutes(a.maxTime) - roundedMinutes(b.maxTime) ||
+    compareByStationName(a, b)
+  )
 }
 
 export function rankStations(participants, stations, { mode = 'fair' } = {}) {
@@ -77,30 +120,7 @@ export function rankStations(participants, stations, { mode = 'fair' } = {}) {
     throw new Error(`지원하지 않는 순위 모드입니다: ${String(mode)}`)
   }
 
-  const results = stations.map((station) => {
-    const times = participants.map((participant) => ({
-      participantId: participant.id,
-      ...travelTime(participant.station.name, station.name),
-    }))
-    const minuteValues = times.map(({ minutes }) => minutes)
-    const maxTime = Math.max(...minuteValues)
-    const minTime = Math.min(...minuteValues)
-    const spread = maxTime - minTime
-
-    return {
-      station,
-      times,
-      maxTime,
-      minTime,
-      spread,
-      totalTransfers: times.reduce((total, { transfers }) => total + transfers, 0),
-      weightedScore: maxTime * 0.7 + spread * 0.3,
-    }
-  })
+  const results = stations.map((station) => buildStationResult(participants, station))
 
   return results.sort(mode === 'weighted' ? compareWeighted : compareFair)
-}
-
-export function roundedMinutes(minutes) {
-  return Math.round(minutes)
 }
