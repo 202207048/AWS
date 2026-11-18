@@ -192,7 +192,7 @@ function App() {
     setExtractStatus(null)
     setParticipants((current) =>
       current.map((participant) =>
-        participant.id === id ? { ...participant, station, hint: null } : participant,
+        participant.id === id ? { ...participant, station, hint: null, autoFrom: null } : participant,
       ),
     )
     invalidateResults()
@@ -326,12 +326,35 @@ function App() {
     setPurposes((current) => promotePurpose(current, response.purpose))
     invalidateResults()
 
-    const unresolvedCount = extractedParticipants.filter((participant) => !participant.station).length
+    // 목록에 없는 지명(예: 김포)은 바로 검색해 첫 결과를 출발지로 자동 선택한다. 사용자가 언제든 바꿀 수 있다.
+    let autoCount = 0
+    for (const participant of extractedParticipants.filter((item) => !item.station && item.hint)) {
+      const geo = await requestGeocode(participant.hint)
+      if (extractionVersion.current !== version) return
+      const place = geo.ok ? geo.results?.[0] : null
+      if (!place) continue
+      autoCount += 1
+      setParticipants((current) =>
+        current.map((item) =>
+          item.id === participant.id && !item.station
+            ? {
+                ...item,
+                station: { name: place.name, lat: place.lat, lng: place.lng, kind: 'place', address: place.address ?? null },
+                autoFrom: participant.hint,
+              }
+            : item,
+        ),
+      )
+    }
+
+    const unresolvedCount = extractedParticipants.filter((participant) => !participant.station).length - autoCount
     setExtractStatus({
-      type: unresolvedCount > 0 ? 'warning' : 'success',
+      type: unresolvedCount > 0 || autoCount > 0 ? 'warning' : 'success',
       message: unresolvedCount > 0
         ? `${extractedParticipants.length}명을 찾았습니다. 표시된 ${unresolvedCount}명의 출발지를 역 목록이나 주소 검색으로 골라 주세요.`
-        : `${extractedParticipants.length}명의 출발역을 채웠습니다. 아래에서 결과를 확인해 주세요.`,
+        : autoCount > 0
+          ? `${extractedParticipants.length}명의 출발지를 채웠습니다. 목록에 없던 ${autoCount}곳은 검색 결과로 자동 선택했으니 확인해 주세요.`
+          : `${extractedParticipants.length}명의 출발역을 채웠습니다. 아래에서 결과를 확인해 주세요.`,
     })
   }
 
@@ -479,6 +502,11 @@ function App() {
             <option key={station.name} value={station.name}>{stationLabel(station.name)}</option>
           ))}
         </select>
+        {participant.station && participant.autoFrom && (
+          <span className="station-auto">
+            “{participant.autoFrom}”을(를) 검색해 ‘{participant.station.name}’(으)로 자동 선택했어요. 다르면 바꿔 주세요.
+          </span>
+        )}
         {!participant.station && (
           <span className="station-warning">
             {participant.hint

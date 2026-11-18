@@ -465,3 +465,6 @@ td { vertical-align: top; }
 
 /* 한글 단어 중간 줄바꿈 방지 */
 body { word-break: keep-all; overflow-wrap: anywhere; }
+
+/* 목록에 없는 지명을 자동으로 고른 행 안내 */
+.station-auto { display: block; margin-top: 4px; color: #8a6d1f; font-size: 12px; line-height: 1.4; }
