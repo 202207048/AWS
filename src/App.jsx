@@ -1,11 +1,20 @@
 import { useMemo, useRef, useState } from 'react'
-import { PURPOSES, STATIONS } from './stations.js'
+import { STATIONS } from './stations.js'
 import { rankStations } from './ranking.js'
 import { baselineStation } from './baseline.js'
 import MapView from './MapView.jsx'
-import { extractErrorMessage, requestExtract, requestVerdict } from './api.js'
-import { stationLabel } from './verdict.js'
-import { SAMPLE_CHAT } from './sampleChat.js'
+import { extractErrorMessage, requestExtract, requestGeocode, requestVerdict } from './api.js'
+import { originLabel, stationLabel } from './verdict.js'
+import { SAMPLE_CHATS } from './sampleChats.js'
+import {
+  MAX_PURPOSE_NOTE,
+  MAX_PURPOSES,
+  PURPOSE_OPTIONS,
+  categoryOrderFor,
+  promotePurpose,
+  togglePurpose,
+} from './purposes.js'
+import { DEPARTURE_BUFFER_MINUTES, departureTime } from './departure.js'
 
 const initialParticipants = [
   { id: 1, station: STATIONS[0] },
@@ -16,6 +25,8 @@ const MODES = [
   { value: 'fair', label: '공평 우선' },
   { value: 'weighted', label: '가중 점수' },
 ]
+
+const MODE_LABELS = { fair: '공평 우선', weighted: '가중 점수' }
 
 const MODE_COPY = {
   fair: {
@@ -30,8 +41,28 @@ const MODE_COPY = {
   },
 }
 
+const GEOCODE_ERRORS = {
+  too_short: '두 글자 이상 입력해 주세요.',
+  empty: '검색 결과가 없어요. 다른 이름으로 찾아보세요.',
+}
+
 function formatScore(score) {
   return score.toFixed(1)
+}
+
+function personLabel(participant, index) {
+  return participant.name ?? `참여자 ${index + 1}`
+}
+
+// 예시를 섞어서 한 바퀴 다 보여 주고, 다음 바퀴의 첫 예시가 직전 예시와 겹치지 않게 한다.
+function shuffledDeck(count, avoidFirst) {
+  const deck = Array.from({ length: count }, (_, index) => index)
+  for (let index = deck.length - 1; index > 0; index -= 1) {
+    const swap = Math.floor(Math.random() * (index + 1))
+    ;[deck[index], deck[swap]] = [deck[swap], deck[index]]
+  }
+  if (deck.length > 1 && deck[0] === avoidFirst) [deck[0], deck[1]] = [deck[1], deck[0]]
+  return deck
 }
 
 function toVerdictRanked(ranked) {
@@ -50,19 +81,19 @@ function toVerdictRanked(ranked) {
   }))
 }
 
-function createShareMessage(result, participants, purpose) {
+function createShareMessage(result, participants, purpose, meetingTime) {
   const participantLines = participants.map((participant, index) => {
     const estimate = result.times.find(({ participantId }) => participantId === participant.id)
-    const name = participant.name ?? `참여자 ${index + 1}`
-    return `${name} (${stationLabel(participant.station.name)} 출발): 약 ${Math.round(estimate.minutes)}분 · 환승 ${estimate.transfers}회`
+    const departure = departureTime(meetingTime, estimate.minutes)
+    return `${personLabel(participant, index)} (${originLabel(participant.station)} 출발): 약 ${Math.round(estimate.minutes)}분 · 환승 ${estimate.transfers}회${departure ? ` · ${departure} 출발` : ''}`
   })
 
   return [
     '[약속 장소 판사]',
-    `${purpose} 약속 장소: ${stationLabel(result.station.name)}`,
+    `${purpose} 약속 장소: ${stationLabel(result.station.name)}${meetingTime ? ` (${meetingTime}까지)` : ''}`,
     ...participantLines,
     `최대 ${Math.round(result.maxTime)}분 · 편차 ${Math.round(result.spread)}분`,
-    '※ 이동시간과 환승 횟수는 추정치입니다.',
+    `※ 이동시간과 환승 횟수는 추정치입니다.${meetingTime ? ` 출발 시각은 ${DEPARTURE_BUFFER_MINUTES}분 여유를 포함합니다.` : ''}`,
   ].join('\n')
 }
 
@@ -86,11 +117,16 @@ async function copyText(text) {
 
 function App() {
   const [participants, setParticipants] = useState(initialParticipants)
-  const [purpose, setPurpose] = useState('밥')
+  const [purposes, setPurposes] = useState(['밥'])
+  const [purposeNote, setPurposeNote] = useState('')
+  const [meetingTime, setMeetingTime] = useState('')
   const [mode, setMode] = useState('fair')
   const [chat, setChat] = useState('')
+  const [sample, setSample] = useState(null)
   const [extractStatus, setExtractStatus] = useState(null)
   const [isExtracting, setIsExtracting] = useState(false)
+  // 참여자별 주소 검색 상태: { [id]: { open, query, loading, results, message } }
+  const [searches, setSearches] = useState({})
   const [results, setResults] = useState([])
   const [baselineResult, setBaselineResult] = useState(null)
   const [verdict, setVerdict] = useState(null)
@@ -99,7 +135,10 @@ function App() {
   const nextId = useRef(3)
   const extractionVersion = useRef(0)
   const calculationVersion = useRef(0)
+  const sampleDeck = useRef([])
+  const lastSampleIndex = useRef(null)
   const hasUnresolvedStation = participants.some((participant) => !participant.station)
+  const purpose = purposes[0] ?? '밥'
 
   // 지도(MapView, PLAN 17절)에 넘길 데이터
   const winnerResult = results[0] ?? null
@@ -110,6 +149,31 @@ function App() {
     [participants],
   )
   const modeCopy = MODE_COPY[mode]
+  const categoryOrder = useMemo(() => categoryOrderFor(purposes), [purposes])
+
+  // 두 기준의 1위를 함께 계산해 결과가 다르면 알려 준다 (API 호출 없음).
+  const modeWinners = useMemo(() => {
+    if (!winnerResult) return null
+    return {
+      fair: rankStations(participantsWithStation, STATIONS, { mode: 'fair' })[0]?.station.name,
+      weighted: rankStations(participantsWithStation, STATIONS, { mode: 'weighted' })[0]?.station.name,
+    }
+  }, [winnerResult, participantsWithStation])
+
+  const departures = useMemo(() => {
+    if (!winnerResult || !meetingTime) return []
+    return participants.map((participant, index) => {
+      const estimate = winnerResult.times.find(({ participantId }) => participantId === participant.id)
+      return {
+        id: participant.id,
+        label: personLabel(participant, index),
+        number: index + 1,
+        minutes: estimate ? Math.round(estimate.minutes) : null,
+        time: estimate ? departureTime(meetingTime, estimate.minutes) : null,
+      }
+    })
+  }, [winnerResult, meetingTime, participants])
+  const departureById = new Map(departures.map((item) => [item.id, item.time]))
 
   const invalidateResults = () => {
     calculationVersion.current += 1
@@ -120,19 +184,61 @@ function App() {
     setIsJudging(false)
   }
 
-  const updateStation = (id, stationName) => {
+  const setStation = (id, station) => {
     setParticipants((current) =>
       current.map((participant) =>
-        participant.id === id
-          ? {
-              ...participant,
-              station: STATIONS.find((station) => station.name === stationName),
-              hint: null,
-            }
-          : participant,
+        participant.id === id ? { ...participant, station, hint: null } : participant,
       ),
     )
     invalidateResults()
+  }
+
+  const updateStation = (id, stationName) => {
+    setStation(id, STATIONS.find((station) => station.name === stationName) ?? null)
+  }
+
+  const updateSearch = (id, patch) => {
+    setSearches((current) => ({ ...current, [id]: { ...current[id], ...patch } }))
+  }
+
+  const openSearch = (id, query = '') => {
+    updateSearch(id, { open: true, query: searches[id]?.query || query, results: null, message: null, loading: false })
+  }
+
+  const closeSearch = (id) => {
+    updateSearch(id, { open: false, results: null, message: null, loading: false })
+  }
+
+  const runSearch = async (id, rawQuery) => {
+    const query = String(rawQuery ?? '').trim()
+    if (!query) {
+      updateSearch(id, { open: true, message: '찾을 주소나 장소 이름을 입력해 주세요.', results: null })
+      return
+    }
+    updateSearch(id, { open: true, query, loading: true, message: null, results: null })
+    const response = await requestGeocode(query)
+    if (response.ok && response.results.length > 0) {
+      updateSearch(id, { loading: false, results: response.results, source: response.source })
+    } else {
+      updateSearch(id, {
+        loading: false,
+        results: null,
+        message: response.ok
+          ? GEOCODE_ERRORS.empty
+          : GEOCODE_ERRORS[response.reason] ?? '지금은 주소 검색을 쓸 수 없어요. 역 목록에서 골라 주세요.',
+      })
+    }
+  }
+
+  const choosePlace = (id, place) => {
+    setStation(id, {
+      name: place.name,
+      lat: place.lat,
+      lng: place.lng,
+      kind: 'place',
+      address: place.address ?? null,
+    })
+    closeSearch(id)
   }
 
   const addParticipant = () => {
@@ -148,13 +254,21 @@ function App() {
     invalidateResults()
   }
 
-  const changePurpose = (nextPurpose) => {
-    setPurpose(nextPurpose)
+  const tapPurpose = (value) => {
+    const next = togglePurpose(purposes, value)
+    if (next.length === 0 || next === purposes) return
+    setPurposes(next)
     invalidateResults()
   }
 
   const loadSampleChat = () => {
-    setChat(SAMPLE_CHAT)
+    if (sampleDeck.current.length === 0) {
+      sampleDeck.current = shuffledDeck(SAMPLE_CHATS.length, lastSampleIndex.current)
+    }
+    const index = sampleDeck.current.shift()
+    lastSampleIndex.current = index
+    setChat(SAMPLE_CHATS[index].chat)
+    setSample({ number: index + 1, title: SAMPLE_CHATS[index].title, chat: SAMPLE_CHATS[index].chat })
     setExtractStatus(null)
   }
 
@@ -185,7 +299,7 @@ function App() {
       id: nextId.current++,
       name: typeof item.name === 'string' && item.name.trim() ? item.name.trim() : `참여자 ${index + 1}`,
       station: STATIONS.find((station) => station.name === item.station) ?? null,
-      hint: typeof item.hint === 'string' ? item.hint : null,
+      hint: typeof item.hint === 'string' && item.hint.trim() ? item.hint.trim() : null,
     }))
 
     while (extractedParticipants.length < 2) {
@@ -193,16 +307,20 @@ function App() {
     }
 
     setParticipants(extractedParticipants)
-    if (PURPOSES.some((item) => item.value === response.purpose)) {
-      setPurpose(response.purpose)
-    }
+    // 힌트가 있는 행은 검색칸에 힌트를 미리 넣어 둔다 (검색은 사용자가 누를 때만).
+    setSearches(Object.fromEntries(
+      extractedParticipants
+        .filter((participant) => !participant.station && participant.hint)
+        .map((participant) => [participant.id, { open: false, query: participant.hint }]),
+    ))
+    setPurposes((current) => promotePurpose(current, response.purpose))
     invalidateResults()
 
     const unresolvedCount = extractedParticipants.filter((participant) => !participant.station).length
     setExtractStatus({
       type: unresolvedCount > 0 ? 'warning' : 'success',
       message: unresolvedCount > 0
-        ? `${extractedParticipants.length}명을 찾았습니다. 표시된 ${unresolvedCount}명의 출발역을 직접 골라 주세요.`
+        ? `${extractedParticipants.length}명을 찾았습니다. 표시된 ${unresolvedCount}명의 출발지를 역 목록이나 주소 검색으로 골라 주세요.`
         : `${extractedParticipants.length}명의 출발역을 채웠습니다. 아래에서 결과를 확인해 주세요.`,
     })
   }
@@ -217,6 +335,8 @@ function App() {
 
     const generated = await requestVerdict({
       purpose,
+      purposes,
+      purposeNote,
       mode: verdictMode,
       participants: participantsWithStation.map(({ id, station }) => ({ id, stationName: station.name })),
       ranked: toVerdictRanked(ranked),
@@ -253,11 +373,125 @@ function App() {
     if (!winnerResult) return
 
     try {
-      await copyText(createShareMessage(winnerResult, participants, purpose))
+      await copyText(createShareMessage(winnerResult, participants, purpose, meetingTime))
       setCopyStatus('copied')
     } catch {
       setCopyStatus('error')
     }
+  }
+
+  const renderOriginField = (participant, index) => {
+    const search = searches[participant.id] ?? {}
+    const label = personLabel(participant, index)
+    const isPlace = participant.station?.kind === 'place'
+
+    if (isPlace) {
+      return (
+        <div className="place-chip">
+          <span className="place-chip__name">
+            <span aria-hidden="true">📍</span> {participant.station.name}
+          </span>
+          {participant.station.address && <small>{participant.station.address}</small>}
+          <button
+            type="button"
+            className="place-chip__clear"
+            onClick={() => setStation(participant.id, null)}
+            aria-label={`${label} 출발지 지우기`}
+          >
+            ×
+          </button>
+        </div>
+      )
+    }
+
+    if (search.open) {
+      return (
+        <div className="origin-search">
+          <form
+            className="origin-search__form"
+            onSubmit={(event) => {
+              event.preventDefault()
+              runSearch(participant.id, search.query)
+            }}
+          >
+            <label className="sr-only" htmlFor={`search-${participant.id}`}>{label} 출발 주소·장소 검색</label>
+            <input
+              id={`search-${participant.id}`}
+              type="search"
+              value={search.query ?? ''}
+              onChange={(event) => updateSearch(participant.id, { query: event.target.value })}
+              placeholder="예: 일산 주엽역, 분당 정자동"
+              enterKeyHint="search"
+              autoComplete="off"
+            />
+            <button type="submit" className="origin-search__submit" disabled={search.loading}>
+              {search.loading ? '검색 중…' : '검색'}
+            </button>
+          </form>
+          {search.message && <p className="origin-search__message">{search.message}</p>}
+          {search.results && (
+            <ul className="origin-search__results" aria-label="검색 결과">
+              {search.results.map((place, placeIndex) => (
+                <li key={`${place.name}-${place.lat}-${place.lng}-${placeIndex}`}>
+                  <button type="button" onClick={() => choosePlace(participant.id, place)}>
+                    <strong>{place.name}</strong>
+                    {place.address && <small>{place.address}</small>}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {search.results && (
+            <p className="origin-search__source">
+              {search.source === 'kakao' ? '카카오맵 검색' : 'OpenStreetMap 검색'} · 이동시간은 직선거리로 추정해요
+            </p>
+          )}
+          <button type="button" className="origin-toggle" onClick={() => closeSearch(participant.id)}>
+            역 목록에서 고르기
+          </button>
+        </div>
+      )
+    }
+
+    return (
+      <>
+        <label className="sr-only" htmlFor={`station-${participant.id}`}>
+          {label} 출발역
+        </label>
+        <select
+          id={`station-${participant.id}`}
+          value={participant.station?.name ?? ''}
+          onChange={(event) => updateStation(participant.id, event.target.value)}
+          aria-invalid={!participant.station}
+        >
+          <option value="" disabled>출발역을 선택하세요</option>
+          {STATIONS.map((station) => (
+            <option key={station.name} value={station.name}>{stationLabel(station.name)}</option>
+          ))}
+        </select>
+        {!participant.station && (
+          <span className="station-warning">
+            {participant.hint
+              ? `“${participant.hint}”은(는) 후보역 목록에 없어요. 역을 고르거나 주소로 찾아 주세요.`
+              : '판결 전에 출발역을 선택해 주세요.'}
+          </span>
+        )}
+        <div className="origin-actions">
+          {!participant.station && participant.hint && (
+            <button
+              type="button"
+              className="origin-hint-search"
+              onClick={() => runSearch(participant.id, search.query || participant.hint)}
+            >
+              “{search.query || participant.hint}” 검색
+            </button>
+          )}
+          <button type="button" className="origin-toggle" onClick={() => openSearch(participant.id, participant.hint ?? '')}>
+            주소·장소로 찾기
+          </button>
+        </div>
+      </>
+    )
   }
 
   return (
@@ -288,6 +522,9 @@ function App() {
         <div className="privacy-note">
           <span aria-hidden="true">🔒</span>
           대화 내용은 저장하지 않습니다.
+          {sample && sample.chat === chat && (
+            <span className="sample-caption">예시 {sample.number}/{SAMPLE_CHATS.length} · {sample.title}</span>
+          )}
         </div>
         <div className="chat-actions">
           <button
@@ -296,7 +533,7 @@ function App() {
             onClick={loadSampleChat}
             disabled={isExtracting}
           >
-            예시 불러오기
+            {sample ? '다른 예시' : '예시 불러오기'}
           </button>
           <button
             className="extract-button"
@@ -332,34 +569,14 @@ function App() {
               <span className="person-badge" aria-hidden="true">{index + 1}</span>
               <div className="participant-field">
                 {participant.name && <span className="person-name">{participant.name}</span>}
-                <label className="sr-only" htmlFor={`station-${participant.id}`}>
-                  {participant.name ?? `참여자 ${index + 1}`} 출발역
-                </label>
-                <select
-                  id={`station-${participant.id}`}
-                  value={participant.station?.name ?? ''}
-                  onChange={(event) => updateStation(participant.id, event.target.value)}
-                  aria-invalid={!participant.station}
-                >
-                  <option value="" disabled>출발역을 선택하세요</option>
-                  {STATIONS.map((station) => (
-                    <option key={station.name} value={station.name}>{stationLabel(station.name)}</option>
-                  ))}
-                </select>
-                {!participant.station && (
-                  <span className="station-warning">
-                    {participant.hint
-                      ? `“${participant.hint}”에 해당하는 후보역을 직접 선택해 주세요.`
-                      : '판결 전에 출발역을 선택해 주세요.'}
-                  </span>
-                )}
+                {renderOriginField(participant, index)}
               </div>
               <button
                 className="remove-button"
                 type="button"
                 onClick={() => removeParticipant(participant.id)}
                 disabled={participants.length <= 2}
-                aria-label={`${participant.name ?? `참여자 ${index + 1}`} 삭제`}
+                aria-label={`${personLabel(participant, index)} 삭제`}
                 title={participants.length <= 2 ? '최소 2명이 필요합니다' : '참여자 삭제'}
               >
                 ×
@@ -385,21 +602,52 @@ function App() {
             <span className="step">02</span>
             <h2 id="purpose-title">이번 약속의 목적은?</h2>
           </div>
+          <span className="count">최대 {MAX_PURPOSES}개 · 누른 순서</span>
         </div>
         <div className="purpose-grid">
-          {PURPOSES.map((item) => (
-            <button
-              className={`purpose-button ${purpose === item.value ? 'selected' : ''}`}
-              type="button"
-              key={item.value}
-              onClick={() => changePurpose(item.value)}
-              aria-pressed={purpose === item.value}
-            >
-              <span aria-hidden="true">{item.emoji}</span>
-              {item.value}
-            </button>
-          ))}
+          {PURPOSE_OPTIONS.map((item) => {
+            const rank = purposes.indexOf(item.value)
+            return (
+              <button
+                className={`purpose-button ${rank >= 0 ? 'selected' : ''}`}
+                type="button"
+                key={item.value}
+                onClick={() => tapPurpose(item.value)}
+                aria-pressed={rank >= 0}
+                aria-label={rank >= 0 ? `${item.value} (${rank + 1}순위)` : item.value}
+              >
+                {rank >= 0 && <span className="purpose-rank" aria-hidden="true">{rank + 1}</span>}
+                {item.value}
+              </button>
+            )
+          })}
         </div>
+        <label className="purpose-note-field" htmlFor="purpose-note">
+          <span>추가 이유 (선택)</span>
+          <input
+            id="purpose-note"
+            type="text"
+            value={purposeNote}
+            maxLength={MAX_PURPOSE_NOTE}
+            onChange={(event) => setPurposeNote(event.target.value.slice(0, MAX_PURPOSE_NOTE))}
+            placeholder="예: 조용히 얘기할 수 있는 곳"
+          />
+          <small>{purposeNote.length}/{MAX_PURPOSE_NOTE}</small>
+        </label>
+        <p className="purpose-honesty">목적은 판결문과 주변 장소 순서에 반영돼요. 역 순위 계산에는 쓰지 않아요.</p>
+
+        <label className="meeting-time-field" htmlFor="meeting-time">
+          <span>몇 시까지 모일까요? (선택)</span>
+          <input
+            id="meeting-time"
+            type="time"
+            value={meetingTime}
+            onChange={(event) => setMeetingTime(event.target.value)}
+          />
+          {meetingTime && (
+            <button type="button" className="origin-toggle" onClick={() => setMeetingTime('')}>지우기</button>
+          )}
+        </label>
       </section>
 
       <button
@@ -407,13 +655,13 @@ function App() {
         type="button"
         onClick={judgeMeetingPlace}
         disabled={isJudging || hasUnresolvedStation}
-        title={hasUnresolvedStation ? '모든 참여자의 출발역을 선택해 주세요' : undefined}
+        title={hasUnresolvedStation ? '모든 참여자의 출발지를 선택해 주세요' : undefined}
       >
         <span aria-hidden="true">⚖</span>
         {isJudging
           ? '판결문 작성 중…'
           : hasUnresolvedStation
-            ? '출발역을 모두 선택해 주세요'
+            ? '출발지를 모두 선택해 주세요'
             : '공평한 장소 판결하기'}
       </button>
 
@@ -442,6 +690,15 @@ function App() {
               ))}
             </div>
           </div>
+          <div className="mode-explainer">
+            <p><strong>공평 우선</strong> = 가장 오래 걸리는 사람의 시간을 먼저 줄임</p>
+            <p><strong>가중 점수</strong> = 최대 시간 × 0.7 + 시간 차이 × 0.3 (평균적 부담과 형평을 섞음)</p>
+            {modeWinners && modeWinners.fair !== modeWinners.weighted && (
+              <p className="mode-diff">
+                이번 입력에서는 두 기준의 결과가 달라요: {MODE_LABELS.fair} → {modeWinners.fair}, {MODE_LABELS.weighted} → {modeWinners.weighted}
+              </p>
+            )}
+          </div>
 
           <div className="table-wrap">
             <table>
@@ -451,8 +708,8 @@ function App() {
                   <th>후보역</th>
                   {participants.map((participant, index) => (
                     <th key={participant.id}>
-                      {participant.name ?? `참여자 ${index + 1}`}
-                      <small>{stationLabel(participant.station.name)} 출발</small>
+                      {personLabel(participant, index)}
+                      <small>{originLabel(participant.station)} 출발</small>
                     </th>
                   ))}
                   <th>{mode === 'weighted' ? '가중 점수' : '최대 · 편차'}</th>
@@ -467,6 +724,9 @@ function App() {
                       <td className="time-cell" key={participantId}>
                         약 {Math.round(minutes)}분
                         <small>환승 {transfers}회</small>
+                        {rank === 0 && departureById.get(participantId) && (
+                          <small className="departure-inline">{departureById.get(participantId)} 출발</small>
+                        )}
                       </td>
                     ))}
                     <td className="criteria-cell">
@@ -540,6 +800,24 @@ function App() {
                   </dl>
                 </article>
               </div>
+              {departures.length > 0 && (
+                <div className="departure-list">
+                  <h4>
+                    각자 출발 시각 ({DEPARTURE_BUFFER_MINUTES}분 여유 포함)
+                    <span className="estimate-badge">추정치</span>
+                  </h4>
+                  <p>{stationLabel(winnerResult.station.name)}에 {meetingTime}까지 도착하려면</p>
+                  <ul>
+                    {departures.map((item) => (
+                      <li key={item.id}>
+                        <span>{item.number}번 · {item.label}</span>
+                        <strong>{item.time ?? '-'} 출발</strong>
+                        {item.minutes !== null && <small>약 {item.minutes}분</small>}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </section>
           )}
 
@@ -595,7 +873,12 @@ function App() {
           </article>
 
           {winnerResult && (
-            <MapView winner={winnerResult} baseline={baselineResult} origins={participantsWithStation} />
+            <MapView
+              winner={winnerResult}
+              baseline={baselineResult}
+              origins={participantsWithStation}
+              categoryOrder={categoryOrder}
+            />
           )}
         </section>
       )}

@@ -114,7 +114,7 @@ function FitView({ pointsKey, view, center }) {
   return null
 }
 
-function MapViewContent({ winner, baseline, origins }) {
+function MapViewContent({ winner, baseline, origins, categories, initialCategory }) {
   const winnerStation = winner.station
   const winnerName = winnerStation.name
   const showBaseline = hasCoordinates(baseline?.station) && baseline.station.name !== winnerName
@@ -126,7 +126,7 @@ function MapViewContent({ winner, baseline, origins }) {
     ...originGroups.map(({ station }) => [station.lat, station.lng]),
   ])
 
-  const [category, setCategory] = useState(DEFAULT_CATEGORY)
+  const [category, setCategory] = useState(initialCategory)
   // 판결 역이 바뀌면 "전체 보기"로 돌아간다.
   const [viewState, setViewState] = useState({ station: winnerName, view: 'all' })
   const view = viewState.station === winnerName ? viewState.view : 'all'
@@ -171,7 +171,7 @@ function MapViewContent({ winner, baseline, origins }) {
     <section className="map-view" aria-label={`${withStationSuffix(winnerName)} 지도와 주변 장소`}>
       <div className="map-view__toolbar">
         <div className="map-view__tabs" role="tablist" aria-label="주변 장소 분류">
-          {PLACE_CATEGORIES.map(({ id, label }) => (
+          {categories.map(({ id, label }) => (
             <button
               key={id}
               type="button"
@@ -255,7 +255,12 @@ function MapViewContent({ winner, baseline, origins }) {
 
       <div className="map-view__places" aria-live="polite">
         {loading && <p className="map-view__status">주변 {categoryLabel} 불러오는 중…</p>}
-        {failed && <p className="map-view__status">주변 장소 정보를 불러오지 못했어요</p>}
+        {failed && (
+          <div className="map-view__empty">
+            <img src="/images/map-empty.png" alt="" className="map-view__empty-image" />
+            <p className="map-view__status">주변 장소 정보를 불러오지 못했어요</p>
+          </div>
+        )}
         {!loading && places.length > 0 && (
           <ol className="map-view__list">
             {places.map((place, index) => (
@@ -288,11 +293,37 @@ function MapViewContent({ winner, baseline, origins }) {
 
 /**
  * 판결 역 지도 + 주변 장소 (PLAN 17절).
- * props: winner(StationResult), baseline(StationResult|null), origins([{ id, station: { name, lat, lng } }])
+ * props: winner(StationResult), baseline(StationResult|null), origins([{ id, station: { name, lat, lng } }]),
+ *        categoryOrder(['food','cafe','play'] 등, 선택), initialCategory(선택, 기본은 categoryOrder 첫 번째 또는 cafe)
  */
-export default function MapView({ winner, baseline = null, origins = [] }) {
+export default function MapView({ winner, baseline = null, origins = [], categoryOrder, initialCategory }) {
+  const orderKey = (categoryOrder ?? []).join(',')
+  const categories = useMemo(() => {
+    const ordered = orderKey
+      .split(',')
+      .map((id) => PLACE_CATEGORIES.find((item) => item.id === id))
+      .filter(Boolean)
+    const rest = PLACE_CATEGORIES.filter((item) => !ordered.includes(item))
+    return [...new Set([...ordered, ...rest])]
+  }, [orderKey])
+  const startCategory = categories.some(({ id }) => id === initialCategory)
+    ? initialCategory
+    : orderKey
+      ? categories[0].id
+      : DEFAULT_CATEGORY
+
   if (!hasCoordinates(winner?.station)) return null
-  return <MapViewContent winner={winner} baseline={baseline} origins={origins} />
+  // 목적 1순위(첫 탭)가 바뀌면 그 탭부터 다시 보여 준다.
+  return (
+    <MapViewContent
+      key={startCategory}
+      winner={winner}
+      baseline={baseline}
+      origins={origins}
+      categories={categories}
+      initialCategory={startCategory}
+    />
+  )
 }
 
 export { MapView }

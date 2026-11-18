@@ -256,3 +256,6 @@
 @media (max-width: 380px) {
   .map-view__tab { padding-inline: 10px; }
 }
+
+.map-view__empty { display: grid; justify-items: center; gap: 6px; }
+.map-view__empty-image { display: block; width: 100%; max-width: 240px; max-height: 120px; object-fit: contain; }

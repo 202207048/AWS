@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { extractErrorMessage, requestExtract, requestVerdict } from './api.js'
+import { extractErrorMessage, requestExtract, requestGeocode, requestVerdict } from './api.js'
 import { createTemplateVerdict } from './verdict.js'
 
 const result = {
@@ -119,5 +119,61 @@ describe('extractErrorMessage', () => {
     expect(extractErrorMessage('no_key')).toBe('AI 키가 없어 직접 선택해 주세요.')
     expect(extractErrorMessage('timeout')).toContain('직접 선택해 주세요.')
     expect(extractErrorMessage(undefined)).toContain('직접 선택해 주세요.')
+  })
+})
+
+describe('requestVerdict purposes', () => {
+  it('purposes와 purposeNote를 함께 보낸다', async () => {
+    const fetchMock = stubFetch(async () => ({ ok: true, json: async () => ({ ok: false, reason: 'no_key' }) }))
+
+    await requestVerdict({ ...request, purposes: ['밥', '카페'], purposeNote: '  조용히 얘기할 수 있는 곳 ' })
+
+    const body = sentBody(fetchMock)
+    expect(body.purpose).toBe('밥')
+    expect(body.purposes).toEqual(['밥', '카페'])
+    expect(body.purposeNote).toBe('조용히 얘기할 수 있는 곳')
+  })
+
+  it('빈 메모는 보내지 않는다', async () => {
+    const fetchMock = stubFetch(async () => ({ ok: true, json: async () => ({ ok: false, reason: 'no_key' }) }))
+
+    await requestVerdict({ ...request, purposes: ['밥'], purposeNote: '   ' })
+
+    expect(sentBody(fetchMock)).not.toHaveProperty('purposeNote')
+  })
+})
+
+describe('requestGeocode', () => {
+  it('검색 결과를 돌려준다 (최대 8개, 좌표 없는 항목 제외)', async () => {
+    const results = Array.from({ length: 10 }, (_, index) => ({ name: `장소${index}`, address: '주소', lat: 37.5, lng: 127 }))
+    results.splice(1, 0, { name: '좌표 없음', address: null })
+    const fetchMock = stubFetch(async () => ({ ok: true, json: async () => ({ ok: true, source: 'osm', results }) }))
+
+    const actual = await requestGeocode(' 일산 ')
+
+    expect(fetchMock.mock.calls[0][0]).toBe(`/api/geocode?q=${encodeURIComponent('일산')}`)
+    expect(actual.ok).toBe(true)
+    expect(actual.source).toBe('osm')
+    expect(actual.results).toHaveLength(8)
+    expect(actual.results.some(({ name }) => name === '좌표 없음')).toBe(false)
+  })
+
+  it('서버 실패 이유를 그대로 돌려준다', async () => {
+    stubFetch(async () => ({ ok: true, json: async () => ({ ok: false, reason: 'too_short' }) }))
+
+    await expect(requestGeocode('a')).resolves.toEqual({ ok: false, reason: 'too_short' })
+  })
+
+  it('네트워크 오류는 실패 응답으로 바꾸고 예외를 던지지 않는다', async () => {
+    stubFetch(async () => { throw new Error('offline') })
+
+    await expect(requestGeocode('일산')).resolves.toEqual({ ok: false, reason: 'error' })
+  })
+
+  it('빈 검색어는 호출하지 않는다', async () => {
+    const fetchMock = stubFetch(async () => ({ ok: true, json: async () => ({}) }))
+
+    await expect(requestGeocode('  ')).resolves.toEqual({ ok: false, reason: 'empty' })
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 })
