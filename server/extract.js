@@ -1,4 +1,4 @@
-import { APIConnectionTimeoutError } from '@anthropic-ai/sdk'
+﻿import { APIConnectionTimeoutError } from '@anthropic-ai/sdk'
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
 import * as z from 'zod'
 import { STATIONS } from '../src/stations.js'
@@ -8,31 +8,31 @@ const MAX_TOKENS = 4000
 const MAX_CHAT_CHARS = 4000
 const MAX_PARTICIPANTS = 6
 const STATION_NAMES = STATIONS.map((station) => station.name)
-const PURPOSES = ['밥', '카페', '술', '공부']
+const PURPOSES = ['諛?, '移댄럹', '??, '怨듬?']
 
 const ExtractSchema = z.object({
   participants: z.array(
     z.object({
-      name: z.string().describe('대화에 나온 사람 이름'),
-      station: z.enum(STATION_NAMES).nullable().describe('후보역 목록 중 하나. 해당 역이 없으면 null'),
-      hint: z.string().nullable().describe('station이 null일 때, 대화에 나온 출발지 표현. 아니면 null'),
+      name: z.string().describe('??붿뿉 ?섏삩 ?щ엺 ?대쫫'),
+      station: z.enum(STATION_NAMES).nullable().describe('?꾨낫??紐⑸줉 以??섎굹. ?대떦 ??씠 ?놁쑝硫?null'),
+      hint: z.string().nullable().describe('station??null???? ??붿뿉 ?섏삩 異쒕컻吏 ?쒗쁽. ?꾨땲硫?null'),
     }),
   ),
-  purpose: z.enum(PURPOSES).nullable().describe('약속 목적. 대화에 없으면 null'),
+  purpose: z.enum(PURPOSES).nullable().describe('?쎌냽 紐⑹쟻. ??붿뿉 ?놁쑝硫?null'),
 })
 
 const EXTRACT_SYSTEM = [
-  '너는 단톡방 대화에서 약속 참여자와 출발지를 정리하는 도우미다.',
-  `후보역 목록: ${STATION_NAMES.join(', ')}`,
-  '규칙:',
-  '- 대화에 출발지가 나온 사람만 참여자로 넣는다. 처음 등장한 순서대로, 한 사람은 한 번만 넣는다.',
-  '- 같은 사람이 출발지를 여러 번 말하면 마지막에 말한 출발지를 쓴다.',
-  '- station에는 후보역 목록에 있는 이름만 그대로 쓴다. 회사·집이 그 역이라고 분명히 말한 경우도 그 역으로 쓴다.',
-  '- 목록에 없는 지역이나 애매한 곳이면 station은 null, hint에 대화 속 표현(예: "일산")을 적는다. 비슷한 역을 추측해 넣지 않는다.',
-  '- purpose는 밥/카페/술/공부 중 대화에서 분명한 것 하나, 없으면 null.',
+  '?덈뒗 ?⑦넚諛???붿뿉???쎌냽 李몄뿬?먯? 異쒕컻吏瑜??뺣━?섎뒗 ?꾩슦誘몃떎.',
+  `?꾨낫??紐⑸줉: ${STATION_NAMES.join(', ')}`,
+  '洹쒖튃:',
+  '- ??붿뿉 異쒕컻吏媛 ?섏삩 ?щ엺留?李몄뿬?먮줈 ?ｋ뒗?? 泥섏쓬 ?깆옣???쒖꽌?濡? ???щ엺? ??踰덈쭔 ?ｋ뒗??',
+  '- 媛숈? ?щ엺??異쒕컻吏瑜??щ윭 踰?留먰븯硫?留덉?留됱뿉 留먰븳 異쒕컻吏瑜??대떎.',
+  '- station?먮뒗 ?꾨낫??紐⑸줉???덈뒗 ?대쫫留?洹몃?濡??대떎. ?뚯궗쨌吏묒씠 洹???씠?쇨퀬 遺꾨챸??留먰븳 寃쎌슦??洹???쑝濡??대떎.',
+  '- 紐⑸줉???녿뒗 吏??씠???좊ℓ??怨녹씠硫?station? null, hint????????쒗쁽(?? "?쇱궛")???곷뒗?? 鍮꾩듂????쓣 異붿륫???ｌ? ?딅뒗??',
+  '- purpose??諛?移댄럹/??怨듬? 以???붿뿉??遺꾨챸??寃??섎굹, ?놁쑝硫?null.',
 ].join('\n')
 
-/** 대화에서 그 사람이 처음 등장한 위치 ("이름:" 우선, 없으면 이름) */
+/** ??붿뿉??洹??щ엺??泥섏쓬 ?깆옣???꾩튂 ("?대쫫:" ?곗꽑, ?놁쑝硫??대쫫) */
 function firstAppearance(chat, name) {
   const speaker = chat.indexOf(`${name}:`)
   if (speaker >= 0) return speaker
@@ -61,8 +61,8 @@ function sanitize(parsed, chat) {
 }
 
 /**
- * 단톡 대화에서 참여자·출발역·목적을 뽑는다. 대화 원문은 로그에 남기지 않는다.
- * 항상 PLAN.md 5-2 형식의 객체를 돌려주고 예외를 던지지 않는다.
+ * ?⑦넚 ??붿뿉??李몄뿬?먃룹텧諛쒖뿭쨌紐⑹쟻??戮묐뒗?? ????먮Ц? 濡쒓렇???④린吏 ?딅뒗??
+ * ??긽 PLAN.md 5-2 ?뺤떇??媛앹껜瑜??뚮젮二쇨퀬 ?덉쇅瑜??섏?吏 ?딅뒗??
  */
 export async function extractFromChat(client, request) {
   const chat = typeof request?.chat === 'string' ? request.chat.trim() : ''
@@ -83,7 +83,7 @@ export async function extractFromChat(client, request) {
     })
   } catch (error) {
     if (error instanceof APIConnectionTimeoutError) return { ok: false, reason: 'timeout' }
-    console.warn('[extract] Claude 호출 실패:', error?.status ?? error?.name ?? 'unknown')
+    console.warn('[extract] Claude ?몄텧 ?ㅽ뙣:', error?.status ?? error?.name ?? 'unknown')
     return { ok: false, reason: 'error' }
   }
 
