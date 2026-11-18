@@ -81,7 +81,7 @@ function createShareMessage(result, participants, purpose, meetingTime) {
   const participantLines = participants.map((participant, index) => {
     const estimate = result.times.find(({ participantId }) => participantId === participant.id)
     const departure = departureTime(meetingTime, estimate.minutes)
-    return `${personLabel(participant, index)} (${originLabel(participant.station)} 출발): 약 ${Math.round(estimate.minutes)}분 · 환승 ${estimate.transfers}회${departure ? ` · ${departure} 출발` : ''}`
+    return `${personLabel(participant, index)} (${originLabel(participant.station)} 출발): 약 ${Math.round(estimate.minutes)}분${departure ? ` · ${departure} 출발` : ''}`
   })
 
   return [
@@ -89,7 +89,7 @@ function createShareMessage(result, participants, purpose, meetingTime) {
     `${purpose} 약속 장소: ${stationLabel(result.station.name)}${meetingTime ? ` (${meetingTime}까지)` : ''}`,
     ...participantLines,
     `가장 오래 걸리는 사람 ${Math.round(result.maxTime)}분 · 사람 사이 시간 차이 ${displayGap(result)}분`,
-    `※ 이동시간과 환승 횟수는 추정치입니다.${meetingTime ? ` 출발 시각은 ${DEPARTURE_BUFFER_MINUTES}분 여유를 포함합니다.` : ''}`,
+    `※ 이동시간은 직선거리 기반 추정치입니다.${meetingTime ? ` 출발 시각은 ${DEPARTURE_BUFFER_MINUTES}분 여유를 포함합니다.` : ''}`,
   ].join('\n')
 }
 
