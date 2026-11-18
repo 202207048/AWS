@@ -71,8 +71,17 @@ const placeIcon = (category) =>
     }),
   )
 
-function isSafeLink(url) {
-  return typeof url === 'string' && /^https?:\/\//i.test(url)
+// 장소를 네이버지도·카카오맵에서 바로 열기 (출처 링크처럼 목록 오른쪽에 표시)
+export function naverMapUrl(place, stationName) {
+  const station = String(stationName ?? '').replace(/역$/, '')
+  const query = station ? `${place.name} ${station}역` : place.name
+  return `https://map.naver.com/p/search/${encodeURIComponent(query)}`
+}
+
+export function kakaoMapUrl(place) {
+  // 카카오맵 공식 URL 형식: /link/map/이름,위도,경도 (해당 위치에 핀)
+  const name = String(place.name).replace(/,/g, ' ')
+  return `https://map.kakao.com/link/map/${encodeURIComponent(name)},${place.lat},${place.lng}`
 }
 
 // '서울역'처럼 이름이 이미 '역'으로 끝나면 다시 붙이지 않는다.
@@ -268,16 +277,28 @@ function MapViewContent({ winner, baseline, origins, categories, initialCategory
             {places.map((place, index) => (
               <li key={`${category}-${index}-${place.name}`} className="map-view__item">
                 <span className={`map-view__dot map-view__dot--${category}`} aria-hidden="true" />
-                <span className="map-view__name">
-                  {isSafeLink(place.url) ? (
-                    <a href={place.url} target="_blank" rel="noopener noreferrer">
-                      {place.name}
-                    </a>
-                  ) : (
-                    place.name
-                  )}
-                </span>
+                <span className="map-view__name">{place.name}</span>
                 {Number.isFinite(place.distance) && <span className="map-view__distance">{place.distance}m</span>}
+                <span className="map-view__links">
+                  <a
+                    className="map-view__link map-view__link--naver"
+                    href={naverMapUrl(place, winnerName)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="네이버지도에서 보기"
+                  >
+                    네이버
+                  </a>
+                  <a
+                    className="map-view__link map-view__link--kakao"
+                    href={kakaoMapUrl(place)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="카카오맵에서 보기"
+                  >
+                    카카오
+                  </a>
+                </span>
               </li>
             ))}
           </ol>
