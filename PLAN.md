@@ -2,7 +2,32 @@
 
 > 팀 공유용 작업 계획입니다. 세 명(개발1·개발2·개발3)이 각자 Kiro로 **동시에** 작업할 수 있도록, 담당 파일과 서로 주고받는 데이터 형식(약속)을 미리 정해 두었습니다.
 >
-> **상태: 제안안.** 10절 "팀이 정할 것"이 확정되면 그에 맞춰 수정합니다.
+> **진행 상황:** 1-0(의존성 버전 고정) 완료, `main`에 반영됨. 처음 보는 사람은 [OVERVIEW.md](OVERVIEW.md)로 전체 그림을 먼저 보세요.
+>
+> 10절의 항목은 **권고안을 기본값으로 진행**합니다. 바꾸고 싶으면 해당 작업을 시작하기 전에 팀이 합의하고 이 문서를 먼저 고칩니다.
+>
+> Kiro는 `.kiro/steering/team-rules.md`의 규칙을 매번 자동으로 읽습니다. 이 문서와 규칙이 다르면 이 문서를 따릅니다.
+
+## 0. 시작 전 준비 (각자 한 번)
+
+1. **Node.js LTS 설치:** [nodejs.org](https://nodejs.org)에서 LTS 버전을 설치하고 Kiro를 **완전히 껐다 켭니다.** 터미널에서 `node -v`가 버전을 출력하면 성공.
+2. **Git 설치:** `git --version`이 안 되면 [git-scm.com](https://git-scm.com)에서 설치하고 Kiro를 재시작합니다.
+3. **최신 코드 받기 + 패키지 설치** (`AWS` 폴더에서):
+   ```bash
+   git checkout main
+   git pull origin main
+   npm install
+   ```
+4. **내 브랜치 만들기** (이미 만들었다면 5번으로):
+   ```bash
+   git checkout -b dev2-calc   # 개발2. 개발3은 dev3-ui
+   ```
+5. **이미 브랜치에서 작업 중이었다면** `main`의 변경(lockfile, 규칙 파일)을 받아옵니다:
+   ```bash
+   git pull origin main
+   npm install
+   ```
+6. `npm test`와 `npm run dev`가 동작하는지 확인하고 시작합니다.
 
 ## 1. 한 줄 요약
 
@@ -34,7 +59,7 @@
 |---|---|---|
 | **개발1 — 서버·Claude** | 버전 고정, API 서버, Claude 판결문·단톡 추출 | `server/**`, `vite.config.js`, `package.json`, `package-lock.json`, `.env.example`, `README.md` |
 | **개발2 — 계산·데이터** | 지하철 데이터, 그래프 계산, 순위, 기존 방식 계산, 데모 조합 찾기 | `src/ranking.js`, `src/graph.js`, `src/baseline.js`, `src/stations.js`, `src/data/**`, `src/*.test.js` 중 계산 관련, `scripts/**` |
-| **개발3 — 화면** | 단톡 입력 화면, 비교 화면, 판결문 표시, API 호출, 공유 메시지 | `src/App.jsx`, `src/styles.css`, `src/api.js`, `src/mockCalc.js`, `src/verdict.js`, `src/verdict.test.js` |
+| **개발3 — 화면** | 단톡 입력 화면, 비교 화면, 판결문 표시, API 호출, 공유 메시지 | `src/App.jsx`, `src/styles.css`, `src/api.js`, `src/mockCalc.js`, `src/sampleChat.js`, `src/verdict.js`, `src/verdict.test.js` |
 
 - 패키지 추가가 필요하면 **개발1에게 요청**한다 (`package.json` 충돌 방지).
 - 남의 파일을 고쳐야 할 것 같으면 직접 고치지 말고 담당자에게 말한다.
@@ -49,7 +74,9 @@
 ```js
 // src/ranking.js
 travelTime(fromName, toName)        // → { minutes, transfers }  (같은 역이면 { minutes: 0, transfers: 0 })
-rankStations(participants, stations) // → StationResult[]  (공평한 순서로 정렬)
+rankStations(participants, stations, { mode }) // → StationResult[]  (공평한 순서로 정렬)
+// mode: 'fair'(기본값) = 최대 시간 → 편차 순서로 정렬
+//       'weighted'     = 기존 점수(최대×0.7 + 편차×0.3)가 낮은 순서로 정렬
 
 // src/baseline.js
 baselineStation(participants, stations) // → StationResult  (좌표 평균점에서 가장 가까운 역, 이동시간은 travelTime으로 계산)
@@ -59,7 +86,8 @@ baselineStation(participants, stations) // → StationResult  (좌표 평균점�
   station: { name, lat, lng },
   times: [{ participantId, minutes, transfers }],
   maxTime, minTime, spread,   // spread = maxTime - minTime
-  totalTransfers
+  totalTransfers,
+  weightedScore               // 최대×0.7 + 편차×0.3 (두 모드 모두 항상 계산해서 넣음)
 }
 
 // participants 형식 (기존과 동일)
@@ -99,7 +127,7 @@ baselineStation(participants, stations) // → StationResult  (좌표 평균점�
 
 ## 6. 브랜치와 합치는 순서
 
-1. **시작 전 (개발1, 약 15분):** 의존성 버전 고정 + lockfile을 `main`에 먼저 올린다. 나머지 둘은 그동안 코드를 읽고 준비한다 (개발2: 지하철 노선 조사, 개발3: 화면 구성 스케치).
+1. ~~시작 전 (개발1, 약 15분): 의존성 버전 고정 + lockfile을 `main`에 먼저 올린다.~~ **완료.** 그 전에 브랜치를 만든 사람은 0절 5번대로 `main`을 한 번 받는다.
 2. 각자 최신 `main`에서 브랜치를 만든다: `dev1-server`, `dev2-calc`, `dev3-ui`
 3. 각자 작업 단위가 끝날 때마다 커밋하고 자기 브랜치에 푸시한다.
 4. **중간 합치기 (시작 후 약 2시간):** **개발1 → 개발3 → 개발2** 순서로 `main`에 합친다. 담당 파일이 겹치지 않으므로 충돌은 거의 없어야 한다.
@@ -115,10 +143,10 @@ baselineStation(participants, stations) // → StationResult  (좌표 평균점�
 
 | # | 작업 | 완료 기준 | 구분 |
 |---|---|---|---|
-| 1-0 | 의존성 버전 고정 | `latest` 없음, lockfile 커밋, `npm install` / `npm test` / `npm run build` 통과. `main`에 먼저 올림 | 필수 |
+| 1-0 ✅ | 의존성 버전 고정 | `latest` 없음, lockfile 커밋, `npm install` / `npm test` / `npm run build` 통과. `main`에 먼저 올림 | 완료 |
 | 1-1 | API 서버 뼈대 | `server/index.js`(`node:http`) + `server/service.js`(순수 함수). Vite `/api` 프록시, `concurrently`로 `npm run dev` 하나에 함께 실행. 로컬 `.env`(`ANTHROPIC_API_KEY=` 빈칸, 커밋 안 함) 생성. `.env`가 없거나 키가 비어도 서버가 뜨고 `{ ok: false, reason: "no_key" }` 응답 | 필수 |
 | 1-2 | Claude 판결문 `/api/verdict` | 8절 호출 규칙 준수. 판결문 속 "N분"이 요청의 계산값과 다르면 `number_mismatch`. 성공·거절·파싱 실패·타임아웃·숫자 불일치 mock 테스트 통과 | 필수 |
-| 1-3 | 단톡 추출 `/api/extract` | 역 이름은 30개 목록(`z.enum`) 또는 null만 허용. 대화 원문은 로그에 남기지 않음. mock 테스트 통과 | 필수 |
+| 1-3 | 단톡 추출 `/api/extract` | 역 이름은 30개 목록(`z.enum`) 또는 null만 허용. 대화 원문은 로그에 남기지 않음. mock 테스트 통과. 16절의 샘플 단톡을 `server/fixtures/sample-chat.txt`로 만들어 테스트에 사용 | 필수 |
 | 1-4 | Gemini 흔적 정리 | `.env.example`, `README.md`에서 Gemini 제거, 실행 방법 갱신 | 필수 |
 | 1-5 | 키 유출 점검 | `.env`에 가짜 키 `sk-ant-TEST`를 넣고 `npm run build` → `dist`에서 `sk-ant`, `ANTHROPIC`, `VITE_GEMINI` 검색 결과 없음 | 필수 |
 
@@ -126,7 +154,7 @@ baselineStation(participants, stations) // → StationResult  (좌표 평균점�
 
 | # | 작업 | 완료 기준 | 구분 |
 |---|---|---|---|
-| 2-1 | 계산 모듈 형식 맞추기 | 5-1의 `travelTime` / `rankStations` / `StationResult` 형식으로 변경 (처음에는 직선거리 공식 그대로). 점수 방식 결정(10절) 반영. 기존 테스트(`ranking.test.js:8-10`, `:32`) 수정 | 필수 |
+| 2-1 | 계산 모듈 형식 맞추기 | 5-1의 `travelTime` / `rankStations` / `StationResult` 형식으로 변경 (처음에는 직선거리 공식 그대로). 점수 방식은 `mode: 'fair'`(기본) / `'weighted'` 두 가지 모두 지원. 두 모드 각각 정렬 테스트. 기존 테스트(`ranking.test.js:8-10`, `:32`) 수정 | 필수 |
 | 2-2 | 기존 방식 계산 | `src/baseline.js` + 테스트. 좌표 평균점에서 가장 가까운 역을 실제로 계산 | 필수 |
 | 2-3 | 지하철 데이터 생성 후 **멈춤** | `src/data/subway.json`: 노드 = 30개 후보역 + 필요한 환승역. 간선 `{ from, to, line, stops, minutes, verified }`, `minutes = stops × 2`. 사람이 지도 앱으로 확인한 구간만 `verified: true` | 필수 |
 | 2-4 | 데이터 자동 점검 | 모든 역 연결됨, 간선 양방향, 좌표로 계산한 속도가 비정상 범위가 아님을 확인하는 테스트 | 필수 |
@@ -138,8 +166,8 @@ baselineStation(participants, stations) // → StationResult  (좌표 평균점�
 | # | 작업 | 완료 기준 | 구분 |
 |---|---|---|---|
 | 3-1 | API 호출 모듈 | `src/api.js`에 `requestVerdict`, `requestExtract`. 실패·네트워크 오류 시 템플릿 판결문으로 대체. `verdict.js`는 템플릿 함수만 남기고 Gemini 코드 제거, `verdict.test.js` 갱신 | 필수 |
-| 3-2 | 단톡 붙여넣기 화면 | 입력칸 + 버튼 → 드롭다운 미리 채움. `station: null`인 행은 강조하고 사용자가 고르기 전에는 판결 버튼 비활성. "대화 내용은 저장하지 않습니다" 안내 | 필수 |
-| 3-3 | 결과 표 갱신 | 참여자별 시간 + 환승 횟수. 점수 칸은 "최대 N분 · 편차 M분". 공식 문구(`App.jsx:207`)를 실제 계산 방식으로 수정. "추정치" 표기 | 필수 |
+| 3-2 | 단톡 붙여넣기 화면 | 입력칸 + 버튼 → 드롭다운 미리 채움. `station: null`인 행은 강조하고 사용자가 고르기 전에는 판결 버튼 비활성. "대화 내용은 저장하지 않습니다" 안내. 16절 샘플 단톡을 `src/sampleChat.js`에 넣고 "예시 불러오기" 버튼으로 채움 | 필수 |
+| 3-3 | 결과 표 갱신 | 참여자별 시간 + 환승 횟수. 점수 칸은 "최대 N분 · 편차 M분" (가중 모드에서는 점수도 함께). 결과 위에 "판결 기준" 토글(공평 우선 / 가중 점수, 기본은 공평 우선). 공식 문구(`App.jsx:207`)를 선택된 방식에 맞게 표시. "추정치" 표기 | 필수 |
 | 3-4 | 기존 방식 비교 카드 | `baselineStation` 결과와 1위를 나란히: 역 이름, 최대 시간, 편차 | 필수 |
 | 3-5 | 판결문 카드 | `order` / `reason` / `sentence`를 주문 / 판결 이유 / 선고로 표시. Gemini 안내 문구(`App.jsx:227`) 교체 | 필수 |
 | 3-6 | 공유 메시지 복사 | 계산된 숫자로만 만든 문구를 클립보드에 복사 | 시간 남으면 |
@@ -167,12 +195,14 @@ baselineStation(participants, stations) // → StationResult  (좌표 평균점�
 - 목적(밥/카페/술/공부)은 판결문 말투에만 반영된다. "목적에 맞춰 추천"이라고 주장하지 않는다.
 - 실제 데이터가 없는 기능(가게 수)은 넣지 않는다.
 
-## 10. 팀이 정할 것 (권고안 포함)
+## 10. 팀이 정할 것 (권고안 = 기본값)
 
-| 항목 | 권고 |
+아래 권고안대로 진행합니다. 바꾸려면 해당 작업 전에 합의하고 이 표를 먼저 고칩니다.
+
+| 항목 | 권고 (기본값) |
 |---|---|
 | 담당자 배정 | 서버 경험이 있는 사람이 개발1, 데이터 꼼꼼한 사람이 개발2, 화면 작업이 익숙한 사람이 개발3 |
-| 점수 방식 | 가중합(최대×0.7+시간차×0.3)은 사실상 "최대 − 0.3×최소"라 설명이 어렵다. **최대 시간 → 편차** 두 단계 순위 방식을 권고 |
+| 점수 방식 | **두 방식 모두 지원, 기본은 "공평 우선(최대 시간 → 편차)".** 가중합(최대×0.7+시간차×0.3)은 사실상 "최대 − 0.3×최소"라 설명이 어려워 기본값에서 뺐고, 화면 토글로 바꿔 볼 수 있게 함. 발표에서는 "기준을 바꿔도 결과가 어떻게 달라지는지 투명하게 보여 준다"로 활용 |
 | 지하철 데이터 컷 시각 | 시작 후 약 2시간까지 검증이 안 되면 직선거리 유지 |
 | 서버 형태 | `node:http` + Vite `/api` 프록시 + `concurrently`. Express·SAM 불필요 |
 | 가게 수 | 이번에는 제외 |
@@ -204,3 +234,41 @@ PLAN.md를 읽고 "개발N" 담당 작업만 해줘.
 - [ ] 가짜 키로 빌드 후 `dist`에서 키 흔적 검색 결과 없음
 - [ ] 의존성 버전 고정 + `package-lock.json` 커밋
 - [ ] 데모 시나리오를 처음부터 끝까지 2회 이상 리허설
+
+## 14. 테스트 기준 (Kiro가 묻지 않고 따를 것)
+
+- 도구는 **vitest** (`npm test`). 새 테스트 도구를 추가하지 않는다.
+- 테스트 파일은 대상 파일 옆에 `*.test.js`로 둔다 (예: `src/graph.js` → `src/graph.test.js`, `server/claude.js` → `server/claude.test.js`).
+- 테스트할 범위는 **7절 내 작업의 "완료 기준"에 적힌 항목**이다. 그 이상은 만들지 않는다.
+- 외부 네트워크·API를 호출하지 않는다. Claude 호출은 SDK를 mock으로 대체한다.
+- 기존 테스트가 새 형식과 맞지 않으면 **내 담당 테스트만** 새 형식에 맞게 고친다.
+- 작업이 끝나면 `npm test` 결과를 보여 주고 멈춘다.
+
+## 15. 화면 배치 기준 (개발3)
+
+- 기존 디자인(카드형 패널, 색상, 모바일 우선 단일 페이지)을 그대로 쓴다. 새 UI 라이브러리를 추가하지 않는다.
+- 위에서 아래 순서:
+  1. 헤더 (기존)
+  2. **단톡 붙여넣기 카드** (새로): 입력칸, "예시 불러오기" / "출발역 채우기" 버튼, "대화 내용은 저장하지 않습니다" 안내
+  3. 01 누가 어디서 오나요? (기존 드롭다운, `station: null` 행은 강조)
+  4. 02 이번 약속의 목적은? (기존)
+  5. 판결 버튼 (기존)
+  6. 03 결과: "판결 기준" 토글 → 순위 표 (시간 + 환승) → **기존 방식 vs 판결 비교 카드** (새로)
+  7. 최종 판결 카드 (주문 / 판결 이유 / 선고)
+  8. 공유 메시지 복사 버튼 (시간 남으면)
+- 새 카드는 기존 `.panel` 스타일을 재사용한다.
+
+## 16. 샘플 단톡 대화
+
+데모와 테스트에 같은 대화를 쓴다. 개발1은 `server/fixtures/sample-chat.txt`, 개발3은 `src/sampleChat.js`에 **같은 내용**을 넣는다. 출발역 목록에 없는 곳(일산)을 일부러 하나 포함한다.
+
+```text
+민수: 이번 주 금요일 저녁에 밥 먹자! 다들 어디서 와?
+지영: 나 회사가 강남이라 강남에서 출발
+현우: 난 집이 수원이라 수원역
+서연: 나는 일산 살아 ㅠ 멀어
+민수: 난 잠실에서 갈게
+```
+
+- 기대 결과: 민수=잠실, 지영=강남, 현우=수원, 서연=null(힌트 "일산"), 목적=밥
+- 데모용 최종 출발지 조합은 2-6 스크립트 결과를 보고 바꿀 수 있다 (바꾸면 두 파일 모두 수정).
