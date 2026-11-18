@@ -22,32 +22,28 @@ const initialParticipants = [
 ]
 
 const MODES = [
-  { value: 'fair', label: '공평 우선' },
-  { value: 'weighted', label: '가중 점수' },
+  { value: 'fair', label: '가장 먼 사람 기준' },
+  { value: 'weighted', label: '전체 균형 기준' },
 ]
 
-const MODE_LABELS = { fair: '공평 우선', weighted: '가중 점수' }
+const MODE_LABELS = { fair: '가장 먼 사람 기준', weighted: '전체 균형 기준' }
 
 const MODE_COPY = {
   fair: {
-    summary: '가장 오래 걸리는 사람의 시간을 먼저 줄이고, 같으면 참여자 간 편차가 작은 역을 골랐어요.',
-    sortRule: '최대 이동시간이 짧은 순, 같으면 편차가 작은 순, 그래도 같으면 역 이름 순으로 정렬합니다(분 단위 반올림 기준).',
-    ruling: '최대 이동시간을 줄이고 편차까지 비교한 역',
+    summary: '제일 오래 걸리는 사람의 시간이 가장 짧은 역을 골랐어요.',
+    sortRule: '제일 오래 걸리는 사람의 시간이 짧은 역부터 보여 줘요. 같으면 사람 사이 시간 차이가 작은 역이 먼저예요.',
+    ruling: '제일 오래 걸리는 사람의 시간이 가장 짧은 역',
   },
   weighted: {
-    summary: '최대 이동시간과 편차를 섞은 가중 점수가 가장 낮은 역을 골랐어요.',
-    sortRule: '점수 = 최대 이동시간 × 0.7 + 편차 × 0.3. 점수가 낮은 순, 같으면 최대 이동시간이 짧은 순, 그래도 같으면 역 이름 순으로 정렬합니다.',
-    ruling: '가중 점수(최대 × 0.7 + 편차 × 0.3)가 가장 낮은 역',
+    summary: '오래 걸리는 시간과 사람 사이 시간 차이를 함께 따져 가장 고른 역을 골랐어요.',
+    sortRule: '제일 오래 걸리는 시간과 사람 사이 시간 차이를 함께 따져, 전체적으로 가장 고른 역부터 보여 줘요.',
+    ruling: '오래 걸리는 시간과 시간 차이를 함께 따진 역',
   },
 }
 
 const GEOCODE_ERRORS = {
   too_short: '두 글자 이상 입력해 주세요.',
   empty: '검색 결과가 없어요. 다른 이름으로 찾아보세요.',
-}
-
-function formatScore(score) {
-  return score.toFixed(1)
 }
 
 function personLabel(participant, index) {
@@ -92,7 +88,7 @@ function createShareMessage(result, participants, purpose, meetingTime) {
     '[약속 장소 판사]',
     `${purpose} 약속 장소: ${stationLabel(result.station.name)}${meetingTime ? ` (${meetingTime}까지)` : ''}`,
     ...participantLines,
-    `최대 ${Math.round(result.maxTime)}분 · 편차 ${Math.round(result.spread)}분`,
+    `가장 오래 걸리는 사람 ${Math.round(result.maxTime)}분 · 사람 사이 시간 차이 ${Math.round(result.spread)}분`,
     `※ 이동시간과 환승 횟수는 추정치입니다.${meetingTime ? ` 출발 시각은 ${DEPARTURE_BUFFER_MINUTES}분 여유를 포함합니다.` : ''}`,
   ].join('\n')
 }
@@ -691,11 +687,11 @@ function App() {
             </div>
           </div>
           <div className="mode-explainer">
-            <p><strong>공평 우선</strong> = 가장 오래 걸리는 사람의 시간을 먼저 줄임</p>
-            <p><strong>가중 점수</strong> = 최대 시간 × 0.7 + 시간 차이 × 0.3 (평균적 부담과 형평을 섞음)</p>
+            <p><strong>가장 먼 사람 기준</strong> · 아무도 너무 멀리 오지 않게</p>
+            <p><strong>전체 균형 기준</strong> · 다 같이 비슷하게 오도록</p>
             {modeWinners && modeWinners.fair !== modeWinners.weighted && (
               <p className="mode-diff">
-                이번 입력에서는 두 기준의 결과가 달라요: {MODE_LABELS.fair} → {modeWinners.fair}, {MODE_LABELS.weighted} → {modeWinners.weighted}
+                이번에는 기준에 따라 결과가 달라요 · {MODE_LABELS.fair} {modeWinners.fair} / {MODE_LABELS.weighted} {modeWinners.weighted}
               </p>
             )}
           </div>
@@ -712,7 +708,7 @@ function App() {
                       <small>{originLabel(participant.station)} 출발</small>
                     </th>
                   ))}
-                  <th>{mode === 'weighted' ? '가중 점수' : '최대 · 편차'}</th>
+                  <th>가장 오래 · 시간 차이</th>
                 </tr>
               </thead>
               <tbody>
@@ -730,10 +726,7 @@ function App() {
                       </td>
                     ))}
                     <td className="criteria-cell">
-                      {mode === 'weighted' && (
-                        <strong className="score-value">점수 {formatScore(result.weightedScore)}</strong>
-                      )}
-                      <strong>최대 {Math.round(result.maxTime)}분 · 편차 {Math.round(result.spread)}분</strong>
+                      <strong>{Math.round(result.maxTime)}분 · 차이 {Math.round(result.spread)}분</strong>
                     </td>
                   </tr>
                 ))}
@@ -762,19 +755,13 @@ function App() {
                   <p>출발 좌표의 평균점에서 가장 가까운 역</p>
                   <dl>
                     <div>
-                      <dt>최대</dt>
+                      <dt>가장 오래</dt>
                       <dd>{Math.round(baselineResult.maxTime)}분</dd>
                     </div>
                     <div>
-                      <dt>편차</dt>
+                      <dt>시간 차이</dt>
                       <dd>{Math.round(baselineResult.spread)}분</dd>
                     </div>
-                    {mode === 'weighted' && (
-                      <div>
-                        <dt>점수</dt>
-                        <dd>{formatScore(baselineResult.weightedScore)}</dd>
-                      </div>
-                    )}
                   </dl>
                 </article>
                 <article className="comparison-card ruling-card">
@@ -784,19 +771,13 @@ function App() {
                   <p>{modeCopy.ruling}</p>
                   <dl>
                     <div>
-                      <dt>최대</dt>
+                      <dt>가장 오래</dt>
                       <dd>{Math.round(winnerResult.maxTime)}분</dd>
                     </div>
                     <div>
-                      <dt>편차</dt>
+                      <dt>시간 차이</dt>
                       <dd>{Math.round(winnerResult.spread)}분</dd>
                     </div>
-                    {mode === 'weighted' && (
-                      <div>
-                        <dt>점수</dt>
-                        <dd>{formatScore(winnerResult.weightedScore)}</dd>
-                      </div>
-                    )}
                   </dl>
                 </article>
               </div>
