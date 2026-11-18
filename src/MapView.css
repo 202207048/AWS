@@ -246,6 +246,47 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* 출처 링크처럼 보이는 작은 칩 (네이버지도 / 카카오맵) */
+.map-view__links {
+  flex: none;
+  display: inline-flex;
+  gap: 4px;
+}
+
+.map-view__link {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid #e4ddd2;
+  border-radius: 999px;
+  background: #fff;
+  color: #5c554c;
+  font-size: 11px;
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+
+.map-view__link::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  margin-right: 5px;
+  border-radius: 50%;
+}
+
+.map-view__link--naver::before { background: #03c75a; }
+.map-view__link--kakao::before { background: #fee500; box-shadow: inset 0 0 0 1px #d8c200; }
+
+.map-view__link:hover,
+.map-view__link:focus-visible {
+  border-color: #8e2026;
+  color: #8e2026;
+  background: #fbf7f1;
+}
+
 .map-view__note {
   margin: 7px 4px 0;
   color: var(--map-view-muted);
